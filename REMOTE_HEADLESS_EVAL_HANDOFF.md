@@ -75,6 +75,9 @@ gh release download checkpoints-v1 \
   --pattern '*.tar.gz' \
   --dir ~/smolvla_eval/downloads
 
+(cd ~/smolvla_eval/downloads && sha256sum -c \
+  PATH_TO_CLONE/RELEASE_ASSETS.sha256)
+
 mkdir -p ~/smolvla_eval/checkpoints
 tar -xzf ~/smolvla_eval/downloads/visual_050000.tar.gz \
   -C ~/smolvla_eval/checkpoints
