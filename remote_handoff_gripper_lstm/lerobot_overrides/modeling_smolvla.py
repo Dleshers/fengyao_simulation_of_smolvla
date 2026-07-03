@@ -30,7 +30,7 @@ Example of finetuning the smolvla pretrained model (`smolvla_base`):
 ```bash
 lerobot-train \
 --policy.path=lerobot/smolvla_base \
---dataset.repo_id=<USER>/svla_so100_task1_v3 \
+--dataset.repo_id=danaaubakirova/svla_so100_task1_v3 \
 --batch_size=64 \
 --steps=200000
 ```
@@ -40,7 +40,7 @@ and an action expert.
 ```bash
 lerobot-train \
 --policy.type=smolvla \
---dataset.repo_id=<USER>/svla_so100_task1_v3 \
+--dataset.repo_id=danaaubakirova/svla_so100_task1_v3 \
 --batch_size=64 \
 --steps=200000
 ```
@@ -52,51 +52,41 @@ policy = SmolVLAPolicy.from_pretrained("lerobot/smolvla_base")
 
 """
 
+import logging
 import math
 from collections import deque
-from typing import TypedDict, Unpack
+from pathlib import Path
+from typing import TypedDict
 
 import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
+from typing_extensions import Unpack
 
-from lerobot.utils.constants import ACTION, OBS_LANGUAGE_ATTENTION_MASK, OBS_LANGUAGE_TOKENS, OBS_STATE
-from lerobot.utils.device_utils import get_safe_dtype
-from lerobot.utils.import_utils import require_package
-
-from ..pretrained import PreTrainedPolicy
-from ..rtc.modeling_rtc import RTCProcessor
-from ..utils import (
+from lerobot.policies.pretrained import PreTrainedPolicy
+from lerobot.policies.rtc.modeling_rtc import RTCProcessor
+from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
+from lerobot.policies.smolvla.smolvlm_with_expert import SmolVLMWithExpertModel
+from lerobot.policies.smolvla.tactile import ArmHandFeatureEnhancement, TactileEmbedding
+from lerobot.policies.utils import (
     populate_queues,
 )
-from .configuration_smolvla import SmolVLAConfig
-from .smolvlm_with_expert import SmolVLMWithExpertModel
-import os
-
-# ==========================================
-# LSTM encoder
-# ==========================================
-class SafetensorsCompatibleLSTM(nn.LSTM):
-    """Keep CUDA LSTM parameters in independent safetensors-compatible storages."""
-
-    def flatten_parameters(self) -> None:
-        return
+from lerobot.utils.constants import ACTION, OBS_LANGUAGE_ATTENTION_MASK, OBS_LANGUAGE_TOKENS, OBS_STATE
+from lerobot.utils.utils import get_safe_dtype
 
 
 class ForceLSTMEncoder(nn.Module):
-    """Encode a causal torque window into one compact latent vector."""
+    """Encode a causal gripper-torque window into one latent vector."""
 
     def __init__(self, input_dim=1, hidden_dim=64, output_dim=16, num_layers=2):
         super().__init__()
-        self.lstm = SafetensorsCompatibleLSTM(
-            input_dim, hidden_dim, num_layers, batch_first=True
-        )
+        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x):
-        _, (hn, _) = self.lstm(x)
-        return self.fc(hn[-1])
-# ==========================================
+    def forward(self, torque_window: Tensor) -> Tensor:
+        _, (hidden, _) = self.lstm(torque_window)
+        return self.fc(hidden[-1])
+
 
 class ActionSelectKwargs(TypedDict, total=False):
     inference_delay: int | None
@@ -265,7 +255,6 @@ class SmolVLAPolicy(PreTrainedPolicy):
                     the configuration class is used.
         """
 
-        require_package("transformers", extra="smolvla")
         super().__init__(config)
         config.validate_features()
         self.config = config
@@ -315,13 +304,21 @@ class SmolVLAPolicy(PreTrainedPolicy):
         lang_tokens = batch[f"{OBS_LANGUAGE_TOKENS}"]
         lang_masks = batch[f"{OBS_LANGUAGE_ATTENTION_MASK}"]
 
-        # ====== 新增：提取特征 ======
-        torque_window = batch.get(self.config.torque_window_key) if self.config.use_torque_lstm else None
-        observation_gripper_torque = batch.get("observation.gripper_torque") # 实机推理时获取队列传进来的序列
+        # Prepare tactile data for inference
+        tactile_force_grid, tactile_resultant_force = self.prepare_tactile(batch)
+        torque_window = self.prepare_torque_window(batch)
 
-        # ====== 修改：传入force_latent, observation.gripper_torque ======
         actions = self.model.sample_actions(
-            images, img_masks, lang_tokens, lang_masks, state, noise=noise, torque_window=torque_window, **kwargs
+            images,
+            img_masks,
+            lang_tokens,
+            lang_masks,
+            state,
+            noise=noise,
+            tactile_force_grid=tactile_force_grid,
+            tactile_resultant_force=tactile_resultant_force,
+            torque_window=torque_window,
+            **kwargs,
         )
 
         # Unpad actions
@@ -407,48 +404,83 @@ class SmolVLAPolicy(PreTrainedPolicy):
         lang_tokens = batch[f"{OBS_LANGUAGE_TOKENS}"]
         lang_masks = batch[f"{OBS_LANGUAGE_ATTENTION_MASK}"]
         actions = self.prepare_action(batch)
+        actions_is_pad = batch.get("actions_id_pad")
 
-        # ====== 新增：安全地从 batch 中提取特征 ======
-        torque_window = batch.get(self.config.torque_window_key) if self.config.use_torque_lstm else None
-        observation_gripper_torque = batch.get("observation.gripper_torque")  # 从数据集中抓取原始序列
+        # Prepare tactile data
+        tactile_force_grid, tactile_resultant_force = self.prepare_tactile(batch)
+        torque_window = self.prepare_torque_window(batch)
 
-        actions_is_pad = batch.get("action_is_pad")
         loss_dict = {}
-
-        # ====== 修改：把 observation.gripper_torque 传给 model ======
-        losses = self.model.forward(
-            images, img_masks, lang_tokens, lang_masks, state, actions, noise, time, torque_window=torque_window
+        model_output = self.model.forward(
+            images,
+            img_masks,
+            lang_tokens,
+            lang_masks,
+            state,
+            actions,
+            noise,
+            time,
+            tactile_force_grid=tactile_force_grid,
+            tactile_resultant_force=tactile_resultant_force,
+            torque_window=torque_window,
         )
-        original_action_dim = self.config.action_feature.shape[0]
-        losses = losses[:, :, :original_action_dim]
-        loss_dict["losses_after_forward"] = losses.clone().mean().item()
+
+        # Handle arm-hand feature enhancement output
+        if self.config.use_arm_hand_feature_enhancement:
+            losses, aux_loss_dict = model_output
+            # Convert tensor aux losses to scalars for logging
+            aux_loss_dict = {
+                k: v.item() if isinstance(v, torch.Tensor) else v
+                for k, v in aux_loss_dict.items()
+            }
+            loss_dict.update(aux_loss_dict)
+        else:
+            losses = model_output
+
+        loss_dict["losses_after_forward"] = losses.clone()
 
         if actions_is_pad is not None:
             in_episode_bound = ~actions_is_pad
             losses = losses * in_episode_bound.unsqueeze(-1)
-            loss_dict["losses_after_in_ep_bound"] = losses.clone().mean().item()
+            loss_dict["losses_after_in_ep_bound"] = losses.clone()
 
         # Remove padding
         losses = losses[:, :, : self.config.max_action_dim]
-        loss_dict["losses_after_rm_padding"] = losses.clone().mean().item()
+        loss_dict["losses_after_rm_padding"] = losses.clone()
 
         if reduction == "none":
-            # Return per-sample losses (B,) by averaging over valid (time, action) entries
-            if actions_is_pad is None:
-                per_sample_loss = losses.mean(dim=(1, 2))
+            # Return per-sample losses (B,) by averaging over time and action dims
+            per_sample_loss = losses.mean(dim=(1, 2))
+
+            # Add auxiliary losses if arm-hand enhancement is enabled
+            if self.config.use_arm_hand_feature_enhancement:
+                # loss_arm_aux and loss_hand_aux are already floats from earlier conversion
+                aux_loss = self.config.aux_loss_lambda * (
+                    loss_dict["loss_arm_aux"] + loss_dict["loss_hand_aux"]
+                )
+                loss_dict["loss_aux_total"] = aux_loss
+                loss_dict["loss"] = per_sample_loss.mean().item() + aux_loss
             else:
-                num_valid = ((~actions_is_pad).sum(dim=1) * losses.shape[-1]).clamp_min(1)
-                per_sample_loss = losses.sum(dim=(1, 2)) / num_valid
-            loss_dict["loss"] = per_sample_loss.mean().item()
+                loss_dict["loss"] = per_sample_loss.mean().item()
+
             return per_sample_loss, loss_dict
         else:
-            # Default: return scalar mean loss over valid (time, action) entries
-            if actions_is_pad is None:
-                loss = losses.mean()
+            # Default: return scalar mean loss
+            loss_main = losses.mean()
+
+            # Add auxiliary losses if arm-hand enhancement is enabled
+            if self.config.use_arm_hand_feature_enhancement:
+                # loss_arm_aux and loss_hand_aux are already floats from earlier conversion
+                aux_loss = self.config.aux_loss_lambda * (
+                    loss_dict["loss_arm_aux"] + loss_dict["loss_hand_aux"]
+                )
+                loss = loss_main + aux_loss
+                loss_dict["loss_main"] = loss_main.item()
+                loss_dict["loss_aux_total"] = aux_loss
             else:
-                num_valid = ((~actions_is_pad).sum() * losses.shape[-1]).clamp_min(1)
-                loss = losses.sum() / num_valid
-            loss_dict["loss"] = loss.item()
+                loss = loss_main
+            loss_dict["loss"] = loss.item() if isinstance(loss, torch.Tensor) else loss
+
             return loss, loss_dict
 
     def prepare_images(self, batch):
@@ -502,6 +534,55 @@ class SmolVLAPolicy(PreTrainedPolicy):
             state[:, motor_idx] = aloha_gripper_to_angular(state[:, motor_idx])
         return state
 
+    def prepare_tactile(self, batch: dict[str, Tensor]) -> tuple[Tensor | None, Tensor | None]:
+        """Extract and prepare tactile data from batch.
+
+        Args:
+            batch: Training batch
+
+        Returns:
+            Tuple of (tactile_force_grid, tactile_resultant_force)
+        """
+        if not self.config.use_tactile:
+            return None, None
+
+        tactile_force_grid = None
+        tactile_resultant_force = None
+
+        # Get force grid
+        force_grid_key = self.config.tactile_force_grid_key
+        if force_grid_key in batch:
+            tactile_force_grid = batch[force_grid_key]
+            # Handle temporal dimension if present (n_obs_steps)
+            if tactile_force_grid.ndim == 6:  # (B, T, N, H, W, C)
+                tactile_force_grid = tactile_force_grid[:, -1]  # Take last obs step
+
+        # Get resultant force if key is specified
+        if self.config.tactile_resultant_force_key is not None:
+            resultant_key = self.config.tactile_resultant_force_key
+            if resultant_key in batch:
+                tactile_resultant_force = batch[resultant_key]
+                if tactile_resultant_force.ndim == 4:  # (B, T, N, 3)
+                    tactile_resultant_force = tactile_resultant_force[:, -1]
+
+        return tactile_force_grid, tactile_resultant_force
+
+    def prepare_torque_window(self, batch: dict[str, Tensor]) -> Tensor | None:
+        if not self.config.use_torque_lstm:
+            return None
+        key = self.config.torque_window_key
+        if key not in batch:
+            raise ValueError(f"Missing required torque feature: {key}")
+        torque_window = batch[key]
+        if torque_window.ndim == 4 and torque_window.shape[1] == 1:
+            torque_window = torque_window.squeeze(1)
+        if torque_window.ndim == 2:
+            torque_window = torque_window.unsqueeze(0)
+        expected = (self.config.torque_window_size, self.config.torque_input_dim)
+        if torque_window.ndim != 3 or tuple(torque_window.shape[-2:]) != expected:
+            raise ValueError(f"{key} must have shape [B,{expected[0]},{expected[1]}], got {tuple(torque_window.shape)}")
+        return torque_window
+
     def _pi_aloha_encode_actions(self, actions):
         # Flip the joints.
         for motor_idx in [1, 2, 8, 9]:
@@ -534,7 +615,7 @@ class SmolVLAPolicy(PreTrainedPolicy):
     def _get_default_peft_targets(self) -> dict[str, any]:
         """Return default PEFT target modules for SmolVLA fine-tuning."""
         common_projections = (
-            "state_proj|torque_to_expert|action_in_proj|action_out_proj|action_time_mlp_in|action_time_mlp_out"
+            "state_proj|action_in_proj|action_out_proj|action_time_mlp_in|action_time_mlp_out"
         )
         target_modules = rf"(model\.vlm_with_expert\.lm_expert\..*\.(q|v)_proj|model\.({common_projections}))"
         return {
@@ -622,45 +703,16 @@ class VLAFlowMatching(nn.Module):
         self.state_proj = nn.Linear(
             self.config.max_state_dim, self.vlm_with_expert.config.text_config.hidden_size
         )
+        self.action_in_proj = nn.Linear(self.config.max_action_dim, self.vlm_with_expert.expert_hidden_size)
+        self.action_out_proj = nn.Linear(self.vlm_with_expert.expert_hidden_size, self.config.max_action_dim)
 
-        # ====== 新增：16维 LSTM 力矩特征的投影层 ======
-        self.force_proj = nn.Linear(
-            16, self.vlm_with_expert.config.text_config.hidden_size
+        self.action_time_mlp_in = nn.Linear(
+            self.vlm_with_expert.expert_hidden_size * 2, self.vlm_with_expert.expert_hidden_size
         )
-        self.force_norm = nn.LayerNorm(16)
-        # ===============================================
+        self.action_time_mlp_out = nn.Linear(
+            self.vlm_with_expert.expert_hidden_size, self.vlm_with_expert.expert_hidden_size
+        )
 
-        # ====== 新增：内置 LSTM 并加载 .pt 权重 ======
-        self.lstm_encoder = ForceLSTMEncoder(input_dim=1)
-        # 使用相对路径加载权重。如果是从 lerobot 根目录运行训练命令，这个相对路径会生效。
-        # 建议将其转为绝对路径以防万一：
-        lstm_path = os.path.abspath("/home/radu/SmolVLA-Fengyao/trained_lstm_weights/torque_16d_encoder.pt")
-        if os.path.exists(lstm_path):
-            try:
-                # 显式设置 weights_only=False 以绕过 PyTorch 2.6 的安全限制
-                loaded = torch.load(lstm_path, map_location="cpu", weights_only=False)
-                
-                if isinstance(loaded, dict):
-                    # 情况 1：如果存的是纯权重字典 (state_dict)
-                    self.lstm_encoder.load_state_dict(loaded)
-                else:
-                    # 情况 2：如果存的是整个模型结构
-                    self.lstm_encoder = loaded
-            except Exception:
-                # 情况 3：如果存的是 TorchScript 打包格式
-                print("检测到 TorchScript 格式，切换为 torch.jit.load 加载...")
-                self.lstm_encoder = torch.jit.load(lstm_path, map_location="cpu")
-        else:
-            print(f"⚠️ 警告: 未找到 LSTM 权重文件 {lstm_path}，使用随机初始化权重。")
-            
-        # 极其关键：将 LSTM 设为评估模式，并冻结所有参数，作为静态传感器使用
-        self.lstm_encoder.eval()
-        for param in self.lstm_encoder.parameters():
-            param.requires_grad = False
-        # ==============================================
-
-        # Controlled torque ablation path. Unlike the legacy force path above,
-        # this encoder runs on the model device and injects into the expert suffix.
         self.torque_lstm = None
         self.torque_norm = None
         self.torque_to_expert = None
@@ -671,25 +723,11 @@ class VLAFlowMatching(nn.Module):
                 output_dim=self.config.torque_lstm_output_dim,
                 num_layers=self.config.torque_lstm_num_layers,
             )
+            self._load_external_torque_lstm_weights()
             self.torque_norm = nn.LayerNorm(self.config.torque_lstm_output_dim)
             self.torque_to_expert = nn.Linear(
                 self.config.torque_lstm_output_dim, self.vlm_with_expert.expert_hidden_size
             )
-            if self.config.torque_lstm_weights_path is not None:
-                state_dict = torch.load(
-                    self.config.torque_lstm_weights_path, map_location="cpu", weights_only=True
-                )
-                self.torque_lstm.load_state_dict(state_dict)
-
-        self.action_in_proj = nn.Linear(self.config.max_action_dim, self.vlm_with_expert.expert_hidden_size)
-        self.action_out_proj = nn.Linear(self.vlm_with_expert.expert_hidden_size, self.config.max_action_dim)
-
-        self.action_time_mlp_in = nn.Linear(
-            self.vlm_with_expert.expert_hidden_size * 2, self.vlm_with_expert.expert_hidden_size
-        )
-        self.action_time_mlp_out = nn.Linear(
-            self.vlm_with_expert.expert_hidden_size, self.vlm_with_expert.expert_hidden_size
-        )
 
         self.set_requires_grad()
         self.fake_image_token = self.vlm_with_expert.processor.tokenizer.fake_image_token_id
@@ -703,36 +741,82 @@ class VLAFlowMatching(nn.Module):
         self.prefix_length = self.config.prefix_length
         self.rtc_processor = rtc_processor
 
-        # Compile model if requested
-        if config.compile_model:
-            torch.set_float32_matmul_precision("high")
-            self.sample_actions = torch.compile(self.sample_actions, mode=config.compile_mode)
-            self.forward = torch.compile(self.forward, mode=config.compile_mode)
-            
-        # # ==========================================================
-        # #  物理锁死主干网络 (PEFT 微调保护)
-        # # ==========================================================
-        # print(" 正在执行主干网络物理冻结协议...", flush=True)
-        
-        # # 冻结核心视觉-语言大模型 (vlm_with_expert)
-        # if hasattr(self, 'vlm_with_expert'):
-        #     for param in self.vlm_with_expert.parameters():
-        #         param.requires_grad = False
-        #     print(" VLM 主干 (vlm_with_expert) 已物理锁死！")
-            
-        # # 确保动作专家层和新增的触觉投影层保持活跃 (解除冻结)
-        # # 因为上面的循环可能把内置的 expert 层也冻结了，我们需要把手的控制权还给它
-        # if hasattr(self.vlm_with_expert, 'expert_layers'):
-        #     for param in self.vlm_with_expert.expert_layers.parameters():
-        #         param.requires_grad = True
-        #     print(" 动作专家层 (expert_layers) 已解除冻结，准备微调！")
-            
-        # # 打印参数占比以供确认
-        # trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        # all_params = sum(p.numel() for p in self.parameters())
-        # print(f" 总参数量: {all_params / 1e6:.2f} M")
-        # print(f" 可训练参数: {trainable_params / 1e6:.2f} M (占 {(trainable_params/all_params)*100:.2f}%)")
-        # # ==========================================================
+        # ==================== Tactile Sensing ====================
+        self.tactile_embedding = None
+        if self.config.use_tactile:
+            self.tactile_embedding = TactileEmbedding(
+                num_fingertips=self.config.num_fingertips,
+                hidden_size=self.vlm_with_expert.config.text_config.hidden_size,
+                latent_dim=self.config.tactile_latent_dim,
+                pretrained_cae_path=self.config.pretrained_cae_path,
+            )
+            # Optionally freeze CAE
+            if not self.config.train_tactile_cae:
+                for param in self.tactile_embedding.cae.parameters():
+                    param.requires_grad = False
+
+        # ==================== Arm-Hand Feature Enhancement ====================
+        self.arm_hand_enhancement = None
+        if self.config.use_arm_hand_feature_enhancement:
+            self.arm_hand_enhancement = ArmHandFeatureEnhancement(
+                shared_dim=self.vlm_with_expert.expert_hidden_size,
+                action_dim=self.config.max_action_dim,
+                arm_indices=self.config.arm_indices,
+                hand_indices=self.config.hand_indices,
+            )
+            # When using arm-hand enhancement, we use the fused head from the module
+            # instead of the simple action_out_proj
+
+    def _load_external_torque_lstm_weights(self) -> None:
+        """Initialize the causal encoder from a standalone LSTM checkpoint."""
+        weights_path = self.config.torque_lstm_weights_path
+        if not weights_path:
+            return
+
+        path = Path(weights_path).expanduser()
+        if not path.is_file():
+            logging.warning(
+                "External torque LSTM weights not found at %s; expecting the enclosing "
+                "SmolVLA checkpoint to provide model.torque_lstm weights.",
+                path,
+            )
+            return
+
+        try:
+            checkpoint = torch.jit.load(str(path), map_location="cpu")
+        except RuntimeError:
+            checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+        if isinstance(checkpoint, torch.jit.ScriptModule):
+            checkpoint = checkpoint.state_dict()
+        if isinstance(checkpoint, dict):
+            for wrapper_key in ("state_dict", "model_state_dict"):
+                if isinstance(checkpoint.get(wrapper_key), dict):
+                    checkpoint = checkpoint[wrapper_key]
+                    break
+        if not isinstance(checkpoint, dict):
+            raise TypeError(f"External torque LSTM checkpoint must contain a state dict, got {type(checkpoint)}")
+
+        aliases = {
+            "encoder_lstm.": "lstm.",
+            "encoder_fc.": "fc.",
+        }
+        state_dict = {}
+        for key, value in checkpoint.items():
+            short_key = key
+            for prefix in ("module.", "model.", "lstm_encoder.", "full_model."):
+                short_key = short_key.removeprefix(prefix)
+            for source, target in aliases.items():
+                if short_key.startswith(source):
+                    short_key = target + short_key.removeprefix(source)
+                    break
+            if short_key.startswith(("lstm.", "fc.")):
+                state_dict[short_key] = value
+
+        missing, unexpected = self.torque_lstm.load_state_dict(state_dict, strict=False)
+        if missing or unexpected:
+            raise ValueError(
+                f"External torque LSTM weights are incompatible: missing={missing}, unexpected={unexpected}"
+            )
 
     def _rtc_enabled(self):
         return self.config.rtc_config is not None and self.config.rtc_config.enabled
@@ -740,19 +824,17 @@ class VLAFlowMatching(nn.Module):
     def set_requires_grad(self):
         for params in self.state_proj.parameters():
             params.requires_grad = self.config.train_state_proj
-
-        # ====== 新增：确保 force_proj 参与训练更新 ======
-        for params in self.force_proj.parameters():
-            params.requires_grad = True
-        # ===============================================
-
         if self.torque_lstm is not None:
-            for param in self.torque_lstm.parameters():
-                param.requires_grad = self.config.train_torque_lstm
-            for param in self.torque_norm.parameters():
-                param.requires_grad = True
-            for param in self.torque_to_expert.parameters():
-                param.requires_grad = True
+            for params in self.torque_lstm.parameters():
+                params.requires_grad = self.config.train_torque_lstm
+
+    def encode_torque_window(self, torque_window: Tensor | None) -> Tensor | None:
+        if self.torque_lstm is None:
+            return None
+        if torque_window is None:
+            raise ValueError("Torque LSTM is enabled but no torque window was provided")
+        latent = self.torque_lstm(torque_window)
+        return self.torque_to_expert(self.torque_norm(latent)).unsqueeze(1)
 
     def sample_noise(self, shape, device):
         noise = torch.normal(
@@ -770,56 +852,27 @@ class VLAFlowMatching(nn.Module):
         time = time_beta * 0.999 + 0.001
         return time
 
-    def encode_force_latent(
-        self,
-        force_latent: torch.Tensor | None = None,
-        observation_gripper_torque: torch.Tensor | None = None,
-        device: torch.device | None = None,
-    ) -> torch.Tensor | None:
-        if observation_gripper_torque is not None:
-            with torch.no_grad():
-                self.lstm_encoder.eval()
-                self.lstm_encoder.to("cpu")
-                cpu_torque = observation_gripper_torque.to("cpu")
-                force_latent = self.lstm_encoder(cpu_torque)
-
-        if force_latent is None:
-            return None
-
-        if device is not None:
-            force_latent = force_latent.to(device)
-
-        return self.force_norm(force_latent)
-
-    def encode_torque_window(self, torque_window: torch.Tensor | None) -> torch.Tensor | None:
-        if not self.config.use_torque_lstm:
-            return None
-        if torque_window is None:
-            raise KeyError(
-                f"Missing torque input '{self.config.torque_window_key}' while use_torque_lstm=True."
-            )
-        # LeRobot may prepend a singleton delta-timestamp axis even though each
-        # dataset row already contains the complete torque window.
-        if torque_window.ndim == 4 and torque_window.shape[1] == 1:
-            torque_window = torque_window.squeeze(1)
-        if torque_window.ndim == 2:
-            torque_window = torque_window.unsqueeze(0)
-        expected = (self.config.torque_window_size, self.config.torque_input_dim)
-        if torque_window.ndim != 3 or tuple(torque_window.shape[-2:]) != expected:
-            raise ValueError(
-                f"Expected torque window [B, {expected[0]}, {expected[1]}], "
-                f"got {tuple(torque_window.shape)}."
-            )
-        model_param = next(self.torque_lstm.parameters())
-        torque_window = torque_window.to(device=model_param.device, dtype=model_param.dtype)
-        latent = self.torque_lstm(torque_window)
-        return self.torque_to_expert(self.torque_norm(latent))
-
     def embed_prefix(
-        self, images, img_masks, lang_tokens, lang_masks, state: torch.Tensor = None, force_latent: torch.Tensor = None
+        self,
+        images,
+        img_masks,
+        lang_tokens,
+        lang_masks,
+        state: torch.Tensor = None,
+        tactile_force_grid: torch.Tensor | None = None,
+        tactile_resultant_force: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Embed images with SigLIP and language tokens with embedding layer to prepare
         for SmolVLM transformer processing.
+
+        Args:
+            images: List of image tensors
+            img_masks: List of image masks
+            lang_tokens: Language tokens
+            lang_masks: Language attention masks
+            state: Robot state tensor
+            tactile_force_grid: Optional tactile force grid (B, N, 10, 12, 3)
+            tactile_resultant_force: Optional pre-computed resultant force (B, N, 3)
         """
         embs = []
         pad_masks = []
@@ -895,19 +948,33 @@ class VLAFlowMatching(nn.Module):
         # Set attention masks so that image and language inputs do not attend to state or actions
         att_masks += [1] * (states_seq_len)
 
-        # ====== 新增：处理并拼接力矩特征 ======
-        if force_latent is not None:
-            force_emb = self.force_proj(force_latent)
-            force_emb = force_emb[:, None, :] if force_emb.ndim == 2 else force_emb
-            embs.append(force_emb)
-            
-            bsize = force_emb.shape[0]
-            force_seq_len = force_emb.shape[1]
-            force_mask = torch.ones(bsize, force_seq_len, dtype=torch.bool, device=force_emb.device)
-            pad_masks.append(force_mask)
-            
-            att_masks += [1] * (force_seq_len)
-        # =======================================
+        # ==================== Tactile Tokens ====================
+        if self.tactile_embedding is not None and tactile_force_grid is not None:
+            # Get tactile embeddings
+            z_tac_f, z_tac_s, _ = self.tactile_embedding(
+                force_grid=tactile_force_grid,
+                resultant_force=tactile_resultant_force,
+            )
+            # z_tac_f and z_tac_s are both (B, N, hidden_size) where N = num_fingertips
+
+            if self.config.tactile_token_mode == "per_fingertip_per_branch":
+                # Add 2*N tokens: interleave force and spatial per fingertip
+                # Shape: (B, 2*N, hidden_size)
+                B, N, H = z_tac_f.shape
+                tactile_tokens = torch.stack([z_tac_f, z_tac_s], dim=2)  # (B, N, 2, H)
+                tactile_tokens = tactile_tokens.view(B, 2 * N, H)  # (B, 2*N, H)
+            else:  # per_branch_pooled
+                # Pool across fingertips: (B, N, H) -> (B, 1, H) for each branch
+                z_tac_f_pooled = z_tac_f.mean(dim=1, keepdim=True)  # (B, 1, H)
+                z_tac_s_pooled = z_tac_s.mean(dim=1, keepdim=True)  # (B, 1, H)
+                tactile_tokens = torch.cat([z_tac_f_pooled, z_tac_s_pooled], dim=1)  # (B, 2, H)
+
+            embs.append(tactile_tokens)
+            tactile_seq_len = tactile_tokens.shape[1]
+            tactile_mask = torch.ones(bsize, tactile_seq_len, dtype=torch.bool, device=device)
+            pad_masks.append(tactile_mask)
+            # Tactile tokens are in the same "block" as state (attention mask = 1)
+            att_masks += [1] * tactile_seq_len
 
         embs = torch.cat(embs, dim=1)
         pad_masks = torch.cat(pad_masks, dim=1)
@@ -924,7 +991,7 @@ class VLAFlowMatching(nn.Module):
 
         return embs, pad_masks, att_masks
 
-    def embed_suffix(self, noisy_actions, timestep, torque_embedding=None):
+    def embed_suffix(self, noisy_actions, timestep, torque_token=None):
         """Embed state, noisy_actions, timestep to prepare for Expert Gemma processing."""
         embs = []
         pad_masks = []
@@ -952,15 +1019,13 @@ class VLAFlowMatching(nn.Module):
         action_time_emb = F.silu(action_time_emb)  # swish == silu
         action_time_emb = self.action_time_mlp_out(action_time_emb)
 
-        # The torque token is part of the action-expert stream, not the VLM prefix.
-        if torque_embedding is not None:
-            torque_token = torque_embedding[:, None, :].to(dtype=action_time_emb.dtype)
+        if torque_token is not None:
+            torque_token = torque_token.to(device=device, dtype=dtype)
             embs.append(torque_token)
             pad_masks.append(torch.ones(bsize, 1, dtype=torch.bool, device=device))
             att_masks.append(1)
 
-        # Add action tokens after the optional torque token. Keeping action tokens
-        # last preserves the existing suffix_out[:, -chunk_size:] behavior.
+        # Add action-time tokens to the suffix.
         embs.append(action_time_emb)
 
         bsize, action_time_dim = action_time_emb.shape[:2]
@@ -976,9 +1041,37 @@ class VLAFlowMatching(nn.Module):
         return embs, pad_masks, att_masks
 
     def forward(
-        self, images, img_masks, lang_tokens, lang_masks, state, actions, noise=None, time=None, torque_window=None
-    ) -> Tensor:
-        """Do a full training forward pass and compute the loss (batch_size x num_steps x num_motors)"""
+        self,
+        images,
+        img_masks,
+        lang_tokens,
+        lang_masks,
+        state,
+        actions,
+        noise=None,
+        time=None,
+        tactile_force_grid: torch.Tensor | None = None,
+        tactile_resultant_force: torch.Tensor | None = None,
+        torque_window: torch.Tensor | None = None,
+    ) -> Tensor | tuple[Tensor, dict[str, Tensor]]:
+        """Do a full training forward pass and compute the loss (batch_size x num_steps x num_motors)
+
+        Args:
+            images: List of image tensors
+            img_masks: List of image masks
+            lang_tokens: Language tokens
+            lang_masks: Language attention masks
+            state: Robot state tensor
+            actions: Ground truth actions (B, chunk_size, action_dim)
+            noise: Optional noise for flow matching
+            time: Optional timestep for flow matching
+            tactile_force_grid: Optional tactile force grid (B, N, 10, 12, 3)
+            tactile_resultant_force: Optional pre-computed resultant force (B, N, 3)
+
+        Returns:
+            If arm_hand_feature_enhancement is enabled: tuple of (total_losses, loss_dict)
+            Otherwise: losses tensor
+        """
         if noise is None:
             noise = self.sample_noise(actions.shape, actions.device)
 
@@ -990,12 +1083,16 @@ class VLAFlowMatching(nn.Module):
         u_t = noise - actions
 
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
-            images, img_masks, lang_tokens, lang_masks, state=state
+            images,
+            img_masks,
+            lang_tokens,
+            lang_masks,
+            state=state,
+            tactile_force_grid=tactile_force_grid,
+            tactile_resultant_force=tactile_resultant_force,
         )
-        torque_embedding = self.encode_torque_window(torque_window)
-        suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(
-            x_t, time, torque_embedding=torque_embedding
-        )
+        torque_token = self.encode_torque_window(torque_window)
+        suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(x_t, time, torque_token)
 
         pad_masks = torch.cat([prefix_pad_masks, suffix_pad_masks], dim=1)
         att_masks = torch.cat([prefix_att_masks, suffix_att_masks], dim=1)
@@ -1013,9 +1110,33 @@ class VLAFlowMatching(nn.Module):
         suffix_out = suffix_out[:, -self.config.chunk_size :]
         # Original openpi code, upcast attention output
         suffix_out = suffix_out.to(dtype=torch.float32)
-        v_t = self.action_out_proj(suffix_out)
-        losses = F.mse_loss(u_t, v_t, reduction="none")
-        return losses
+
+        # ==================== Arm-Hand Feature Enhancement ====================
+        if self.arm_hand_enhancement is not None:
+            # Get arm/hand features and predictions
+            z_arm, z_hand, v_main, v_arm, v_hand = self.arm_hand_enhancement(suffix_out)
+
+            # Compute main loss (flow matching on full action)
+            losses_main = F.mse_loss(u_t, v_main, reduction="none")
+
+            # Compute auxiliary losses with selective supervision
+            L_arm, L_hand = self.arm_hand_enhancement.compute_auxiliary_losses(u_t, v_arm, v_hand)
+
+            # Return losses with auxiliary info
+            # For backward compatibility, return the combined losses tensor
+            # but also include the breakdown in a dict
+            loss_dict = {
+                "loss_main": losses_main.mean(),
+                "loss_arm_aux": L_arm,
+                "loss_hand_aux": L_hand,
+            }
+
+            return losses_main, loss_dict
+        else:
+            # Original behavior without arm-hand enhancement
+            v_t = self.action_out_proj(suffix_out)
+            losses = F.mse_loss(u_t, v_t, reduction="none")
+            return losses
 
     def sample_actions(
         self,
@@ -1025,22 +1146,40 @@ class VLAFlowMatching(nn.Module):
         lang_masks,
         state,
         noise=None,
-        torque_window=None,
+        tactile_force_grid: torch.Tensor | None = None,
+        tactile_resultant_force: torch.Tensor | None = None,
+        torque_window: torch.Tensor | None = None,
         **kwargs: Unpack[ActionSelectKwargs],
     ) -> Tensor:
-        """Do a full inference forward and compute the action (batch_size x num_steps x num_motors)"""
+        """Do a full inference forward and compute the action (batch_size x num_steps x num_motors)
+
+        Args:
+            images: List of image tensors
+            img_masks: List of image masks
+            lang_tokens: Language tokens
+            lang_masks: Language attention masks
+            state: Robot state tensor
+            noise: Optional noise for flow matching
+            tactile_force_grid: Optional tactile force grid (B, N, 10, 12, 3)
+            tactile_resultant_force: Optional pre-computed resultant force (B, N, 3)
+        """
         bsize = state.shape[0]
         device = state.device
-
-        torque_embedding = self.encode_torque_window(torque_window)
 
         if noise is None:
             actions_shape = (bsize, self.config.chunk_size, self.config.max_action_dim)
             noise = self.sample_noise(actions_shape, device)
 
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
-            images, img_masks, lang_tokens, lang_masks, state=state
+            images,
+            img_masks,
+            lang_tokens,
+            lang_masks,
+            state=state,
+            tactile_force_grid=tactile_force_grid,
+            tactile_resultant_force=tactile_resultant_force,
         )
+        torque_token = self.encode_torque_window(torque_window)
         prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
         prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
         # Compute image and language key value cache
@@ -1066,7 +1205,7 @@ class VLAFlowMatching(nn.Module):
                     prefix_pad_masks=prefix_pad_masks,
                     past_key_values=past_key_values,
                     timestep=current_timestep,
-                    torque_embedding=torque_embedding,
+                    torque_token=torque_token,
                 )
 
             if self._rtc_enabled():
@@ -1098,12 +1237,10 @@ class VLAFlowMatching(nn.Module):
         past_key_values,
         x_t,
         timestep,
-        torque_embedding=None,
+        torque_token=None,
     ):
         """Apply one denoising step of the noise `x_t` at a given timestep."""
-        suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(
-            x_t, timestep, torque_embedding=torque_embedding
-        )
+        suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(x_t, timestep, torque_token)
 
         suffix_len = suffix_pad_masks.shape[1]
         batch_size = prefix_pad_masks.shape[0]
@@ -1127,5 +1264,11 @@ class VLAFlowMatching(nn.Module):
         suffix_out = outputs_embeds[1]
         suffix_out = suffix_out[:, -self.config.chunk_size :]
         suffix_out = suffix_out.to(dtype=torch.float32)
-        v_t = self.action_out_proj(suffix_out)
+
+        # Use arm-hand enhancement fused head if enabled
+        if self.arm_hand_enhancement is not None:
+            _, _, v_t, _, _ = self.arm_hand_enhancement(suffix_out)
+        else:
+            v_t = self.action_out_proj(suffix_out)
+
         return v_t

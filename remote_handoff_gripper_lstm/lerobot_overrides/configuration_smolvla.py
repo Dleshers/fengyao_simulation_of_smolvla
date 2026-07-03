@@ -13,12 +13,16 @@
 # limitations under the License.
 
 from dataclasses import dataclass, field
+from typing import Literal
 
-from lerobot.configs import FeatureType, NormalizationMode, PolicyFeature, PreTrainedConfig
-from lerobot.optim import AdamWConfig, CosineDecayWithWarmupSchedulerConfig
+from lerobot.configs.policies import PreTrainedConfig
+from lerobot.configs.types import FeatureType, NormalizationMode, PolicyFeature
+from lerobot.optim.optimizers import AdamWConfig
+from lerobot.optim.schedulers import (
+    CosineDecayWithWarmupSchedulerConfig,
+)
+from lerobot.policies.rtc.configuration_rtc import RTCConfig
 from lerobot.utils.constants import OBS_IMAGES
-
-from ..rtc.configuration_rtc import RTCConfig
 
 
 @PreTrainedConfig.register_subclass("smolvla")
@@ -34,6 +38,7 @@ class SmolVLAConfig(PreTrainedConfig):
             "VISUAL": NormalizationMode.IDENTITY,
             "STATE": NormalizationMode.MEAN_STD,
             "ACTION": NormalizationMode.MEAN_STD,
+            "TACTILE": NormalizationMode.MEAN_STD,  # For tactile force grids
             "ENV": NormalizationMode.MEAN_STD,
         }
     )
@@ -49,28 +54,11 @@ class SmolVLAConfig(PreTrainedConfig):
     # left and right wrist cameras in addition to the top camera.
     empty_cameras: int = 0
 
-    # Optional narrow setup for gripper-only tactile experiments.
-    gripper_only_tactile: bool = False
-    tactile_torque_key: str = "observation.gripper_torque"
-    wrist_camera_key: str = f"{OBS_IMAGES}.wrist"
-
-    # Torque-window ablation: raw history -> LSTM -> one action-expert suffix token.
-    # Keep this False for the visual-only baseline.
-    use_torque_lstm: bool = False
-    torque_window_key: str = "observation.gripper_torque"
-    torque_window_size: int = 30
-    torque_input_dim: int = 1
-    torque_lstm_hidden_dim: int = 64
-    torque_lstm_output_dim: int = 16
-    torque_lstm_num_layers: int = 2
-    train_torque_lstm: bool = True
-    torque_lstm_weights_path: str | None = None
-
     # Converts the joint and gripper values from the standard Aloha space to
     # the space used by the pi internal runtime which was used to train the base model.
     adapt_to_pi_aloha: bool = False
 
-    # Converts joint dimensions to relative values with respect to the current state before passing to the model.
+    # Converts joint dimensions to deltas with respect to the current state before passing to the model.
     # Gripper dimensions will remain in absolute values.
     use_delta_joint_actions_aloha: bool = False
 
@@ -100,7 +88,7 @@ class SmolVLAConfig(PreTrainedConfig):
     scheduler_decay_lr: float = 2.5e-6
 
     vlm_model_name: str = "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"  # Select the VLM backbone.
-    load_vlm_weights: bool = False  # Set to False in case of training the expert from scratch. True when init from pretrained SmolVLA weights
+    load_vlm_weights: bool = False  # Set to True in case of training the expert from scratch. True when init from pretrained SmolVLA weights
 
     add_image_special_tokens: bool = False  # Whether to use special image tokens around image features.
 
@@ -121,8 +109,67 @@ class SmolVLAConfig(PreTrainedConfig):
     # Real-Time Chunking (RTC) configuration
     rtc_config: RTCConfig | None = None
 
-    compile_model: bool = False  # Whether to use torch.compile for model optimization
-    compile_mode: str = "max-autotune"  # Torch compile mode
+    # ==================== Tactile Sensing Configuration ====================
+    # Enable tactile sensing integration (DexGrasp-VLA paper arXiv:2511.00139v1)
+    use_tactile: bool = False
+
+    # Number of fingertips/tactile sensors (default 2 for gripper)
+    num_fingertips: int = 2
+
+    # Key for tactile force grid in observation dict (shape: N x 10 x 12 x 3)
+    tactile_force_grid_key: str = "observation.tactile.force_grid"
+
+    # Optional key for pre-computed resultant force (shape: N x 3)
+    # If None, resultant force is computed from force_grid in the model
+    tactile_resultant_force_key: str | None = None
+
+    # How to organize tactile tokens in prefix
+    # - "per_fingertip_per_branch": 2*N tokens (one force + one spatial per fingertip)
+    # - "per_branch_pooled": 2 tokens (pooled force + pooled spatial across fingertips)
+    tactile_token_mode: Literal["per_fingertip_per_branch", "per_branch_pooled"] = "per_fingertip_per_branch"
+
+    # CAE latent dimension (paper uses 128)
+    tactile_latent_dim: int = 128
+
+    # Path to pretrained CAE weights (optional, for using a separately trained CAE)
+    pretrained_cae_path: str | None = None
+
+    # Whether to train the CAE encoder (if False, freeze CAE weights)
+    train_tactile_cae: bool = True
+
+    # Gripper torque history encoded as one Action Expert suffix token.
+    use_torque_lstm: bool = False
+    torque_window_key: str = "observation.gripper_torque"
+    torque_window_size: int = 30
+    torque_input_dim: int = 1
+    torque_lstm_hidden_dim: int = 64
+    torque_lstm_output_dim: int = 16
+    torque_lstm_num_layers: int = 2
+    # The external encoder is frozen by default; the suffix projection remains trainable.
+    train_torque_lstm: bool = False
+
+    # Compatibility fields retained by checkpoints from the source machine.
+    gripper_only_tactile: bool = False
+    tactile_torque_key: str = "observation.gripper_torque"
+    wrist_camera_key: str = f"{OBS_IMAGES}.wrist"
+    torque_lstm_weights_path: str | None = None
+    compile_model: bool = False
+    compile_mode: str = "max-autotune"
+
+    # ==================== Arm-Hand Feature Enhancement ====================
+    # Enable Arm-Hand Feature Enhancement module (paper Sec. 3.4.1)
+    use_arm_hand_feature_enhancement: bool = False
+
+    # Indices of action dimensions corresponding to arm control
+    # Default: first 6 dimensions (e.g., dx, dy, dz, drx, dry, drz)
+    arm_indices: list[int] = field(default_factory=lambda: list(range(6)))
+
+    # Indices of action dimensions corresponding to hand/gripper control
+    # Default: 7th dimension (gripper)
+    hand_indices: list[int] = field(default_factory=lambda: [6])
+
+    # Weight for auxiliary losses (lambda in Eq. 13: L_total = L_main + lambda * (L_arm + L_hand))
+    aux_loss_lambda: float = 1.0
 
     def __post_init__(self):
         super().__post_init__()
@@ -137,15 +184,29 @@ class SmolVLAConfig(PreTrainedConfig):
             raise NotImplementedError(
                 "`use_delta_joint_actions_aloha` is used by smolvla for aloha real models. It is not ported yet in LeRobot."
             )
-        if self.gripper_only_tactile and self.input_features and self.output_features:
-            self._validate_gripper_only_tactile_setup()
-        if self.use_torque_lstm:
-            if self.torque_window_size <= 0 or self.torque_input_dim <= 0:
-                raise ValueError("Torque window size and input dimension must be positive.")
-            if self.torque_lstm_hidden_dim <= 0 or self.torque_lstm_output_dim <= 0:
-                raise ValueError("Torque LSTM hidden and output dimensions must be positive.")
-            if self.torque_lstm_num_layers <= 0:
-                raise ValueError("Torque LSTM must have at least one layer.")
+
+        # Tactile validation
+        if self.use_tactile:
+            if self.num_fingertips < 1:
+                raise ValueError(f"num_fingertips must be >= 1, got {self.num_fingertips}")
+            if self.tactile_token_mode not in ["per_fingertip_per_branch", "per_branch_pooled"]:
+                raise ValueError(
+                    f"tactile_token_mode must be 'per_fingertip_per_branch' or 'per_branch_pooled', "
+                    f"got {self.tactile_token_mode}"
+                )
+
+        # Arm-Hand Feature Enhancement validation
+        if self.use_arm_hand_feature_enhancement:
+            if len(self.arm_indices) == 0 and len(self.hand_indices) == 0:
+                raise ValueError(
+                    "When using arm_hand_feature_enhancement, at least one of arm_indices or hand_indices must be non-empty"
+                )
+            # Check for overlap
+            overlap = set(self.arm_indices) & set(self.hand_indices)
+            if overlap:
+                raise ValueError(
+                    f"arm_indices and hand_indices must not overlap, but found common indices: {overlap}"
+            )
 
     def validate_features(self) -> None:
         for i in range(self.empty_cameras):
@@ -156,47 +217,14 @@ class SmolVLAConfig(PreTrainedConfig):
             )
             self.input_features[key] = empty_camera
 
-        if self.gripper_only_tactile:
-            self._validate_gripper_only_tactile_setup()
         if self.use_torque_lstm:
-            torque_feature = self.input_features.get(self.torque_window_key)
+            feature = self.input_features.get(self.torque_window_key)
             expected_shape = (self.torque_window_size, self.torque_input_dim)
-            if torque_feature is None:
+            if feature is None or feature.shape != expected_shape:
+                actual_shape = None if feature is None else feature.shape
                 raise ValueError(
-                    f"`use_torque_lstm=True` requires input feature '{self.torque_window_key}'."
+                    f"{self.torque_window_key} must have shape {expected_shape}, got {actual_shape}"
                 )
-            if torque_feature.shape != expected_shape:
-                raise ValueError(
-                    f"Torque feature '{self.torque_window_key}' must have shape {expected_shape}, "
-                    f"got {torque_feature.shape}."
-                )
-
-    def _validate_gripper_only_tactile_setup(self) -> None:
-        image_features = [key for key, feat in self.input_features.items() if feat.type == FeatureType.VISUAL]
-        if len(image_features) != 1 or image_features[0] != self.wrist_camera_key:
-            raise ValueError(
-                "`gripper_only_tactile=True` expects exactly one wrist camera feature "
-                f"named '{self.wrist_camera_key}', got {image_features}."
-            )
-
-        action_feature = self.output_features.get("action")
-        if action_feature is None or action_feature.shape != (1,):
-            raise ValueError(
-                "`gripper_only_tactile=True` expects output feature 'action' with shape (1,), "
-                f"got {action_feature}."
-            )
-
-        if self.tactile_torque_key not in self.input_features:
-            raise ValueError(
-                "`gripper_only_tactile=True` expects raw torque input feature "
-                f"'{self.tactile_torque_key}'."
-            )
-
-        if self.empty_cameras != 0:
-            raise ValueError("`gripper_only_tactile=True` expects `empty_cameras=0`.")
-
-        if self.adapt_to_pi_aloha:
-            raise ValueError("`gripper_only_tactile=True` expects `adapt_to_pi_aloha=False`.")
 
     def get_optimizer_preset(self) -> AdamWConfig:
         return AdamWConfig(
@@ -226,3 +254,10 @@ class SmolVLAConfig(PreTrainedConfig):
     @property
     def reward_delta_indices(self) -> None:
         return None
+
+    @property
+    def tactile_features(self) -> dict[str, PolicyFeature]:
+        """Get tactile features from input_features."""
+        if not self.input_features:
+            return {}
+        return {key: ft for key, ft in self.input_features.items() if ft.type is FeatureType.TACTILE}
