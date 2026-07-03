@@ -1,0 +1,701 @@
+diff --git a/lerobot/convert_pick_place_basket_tacex.py b/lerobot/convert_pick_place_basket_tacex.py
+index 1fc91584..34e4f088 100644
+--- a/lerobot/convert_pick_place_basket_tacex.py
++++ b/lerobot/convert_pick_place_basket_tacex.py
+@@ -17,6 +17,7 @@ from pathlib import Path
+ 
+ import h5py
+ import numpy as np
++import cv2
+ 
+ from lerobot.datasets.lerobot_dataset import LeRobotDataset
+ from lerobot.isaaclab_tactile.policy_io import (
+@@ -99,6 +100,22 @@ def parse_args():
+         action="store_true",
+         help="Save images as videos instead of individual PNGs",
+     )
++    parser.add_argument(
++        "--tactile-source",
++        choices=("force_grid_geometric", "force_geometric_broadcast", "photometric_rgb_grid"),
++        default="force_grid_geometric",
++        help=(
++            "Source for observation.tactile.force_grid. "
++            "force_grid_geometric uses raw force_grid_geometric_left/right when available; "
++            "force_geometric_broadcast broadcasts the 3D geometric resultant; "
++            "photometric_rgb_grid downsamples tactile_left/right RGB to the tactile grid."
++        ),
++    )
++    parser.add_argument(
++        "--store-photometric-resultant-force",
++        action="store_true",
++        help="Store observation.tactile.resultant_force from force_photometric_left/right when available.",
++    )
+     parser.add_argument(
+         "--store-debug-fields",
+         action="store_true",
+@@ -107,6 +124,51 @@ def parse_args():
+     return parser.parse_args()
+ 
+ 
++def build_force_grid_photometric_rgb(left_rgb: np.ndarray, right_rgb: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
++    """Downsample raw TacEx tactile RGB images to a two-finger RGB grid in [0, 1]."""
++
++    grids = []
++    for rgb in (left_rgb, right_rgb):
++        arr = np.asarray(rgb)
++        if arr.ndim != 3 or arr.shape[-1] < 3:
++            raise ValueError(f"Expected tactile RGB image HWC with 3 channels, got shape={arr.shape}")
++        arr = arr[..., :3].astype(np.float32)
++        if arr.max(initial=0.0) > 1.5:
++            arr = arr / 255.0
++        arr = np.clip(arr, 0.0, 1.0)
++        grids.append(cv2.resize(arr, (out_w, out_h), interpolation=cv2.INTER_AREA))
++    return np.stack(grids, axis=0).astype(np.float32)
++
++
++def build_resultant_force_photometric_rgb(left_rgb: np.ndarray, right_rgb: np.ndarray) -> np.ndarray:
++    """Compute the photometric resultant-force feature used by the current LeRobot dataset."""
++
++    forces = []
++    for rgb in (left_rgb, right_rgb):
++        arr = np.asarray(rgb)
++        if arr.ndim != 3 or arr.shape[-1] < 3:
++            raise ValueError(f"Expected tactile RGB image HWC with 3 channels, got shape={arr.shape}")
++        arr = arr[..., :3].astype(np.float32)
++        if arr.max(initial=0.0) > 1.5:
++            arr = arr / 255.0
++        arr = np.clip(arr, 0.0, 1.0)
++        centered = arr - 0.5
++        rgb_deviation = float(np.abs(centered).mean())
++        shear_scale = 4.0
++        normal_scale = 2.0
++        forces.append(
++            np.array(
++                [
++                    float(centered[..., 0].mean()) * rgb_deviation * shear_scale,
++                    float(centered[..., 1].mean()) * rgb_deviation * shear_scale,
++                    rgb_deviation * normal_scale,
++                ],
++                dtype=np.float32,
++            )
++        )
++    return np.stack(forces, axis=0).astype(np.float32)
++
++
+ def main():
+     args = parse_args()
+ 
+@@ -126,6 +188,8 @@ def main():
+     print(f"  State dim: {STATE_DIM} (canonical policy format)")
+     print(f"  Action dim: {ACTION_DIM} (canonical policy format)")
+     print(f"  Force grid: {args.num_fingertips} x {args.force_grid_height} x {args.force_grid_width} x 3")
++    print(f"  Tactile source: {args.tactile_source}")
++    print(f"  Store photometric resultant force: {args.store_photometric_resultant_force}")
+ 
+     # Define dataset features
+     features = {
+@@ -149,6 +213,12 @@ def main():
+             "names": None,
+         },
+     }
++    if args.store_photometric_resultant_force:
++        features["observation.tactile.resultant_force"] = {
++            "dtype": "float32",
++            "shape": (args.num_fingertips, 3),
++            "names": None,
++        }
+ 
+     # Optionally add debug fields
+     if args.store_debug_fields:
+@@ -177,7 +247,8 @@ def main():
+ 
+         for idx, demo_name in enumerate(demos, 1):
+             demo = f["data"][demo_name]
+-            T = demo["actions"].shape[0]
++            action_key = "teacher_actions_ik" if "teacher_actions_ik" in demo else "actions"
++            T = demo[action_key].shape[0]
+ 
+             print(f"  [{idx}/{total_demos}] {demo_name}: {T} steps", end="\r")
+ 
+@@ -210,8 +281,8 @@ def main():
+                     base_quat_w=base_quat_w,
+                 )
+ 
+-                # Get raw action from HDF5 (7D: [delta_pos(3), delta_rot(3), gripper(1)])
+-                raw_action = demo["actions"][t].astype(np.float32)
++                # Get policy action from HDF5 (7D: [delta_pos(3), delta_rot(3), gripper(1)]).
++                raw_action = demo[action_key][t].astype(np.float32)
+ 
+                 # Transform action from world frame to base frame (7D)
+                 delta_pos_w = raw_action[:3]
+@@ -225,11 +296,24 @@ def main():
+                     base_quat_w=base_quat_w,
+                 )
+ 
+-                # Build synthetic force grid from resultant forces
+-                fL = demo["force_geometric_left"][t].astype(np.float32)  # (3,)
+-                fR = demo["force_geometric_right"][t].astype(np.float32)  # (3,)
+-                grid = np.stack([fL, fR], axis=0)[:, None, None, :] * scale
+-                grid = np.broadcast_to(grid, (args.num_fingertips, H, W, 3)).copy().astype(np.float32)
++                # Build tactile grid.
++                if args.tactile_source == "photometric_rgb_grid":
++                    grid = build_force_grid_photometric_rgb(demo["tactile_left"][t], demo["tactile_right"][t], H, W)
++                elif args.tactile_source == "force_grid_geometric" and (
++                    "force_grid_geometric_left" in demo and "force_grid_geometric_right" in demo
++                ):
++                    grid = np.stack(
++                        [
++                            demo["force_grid_geometric_left"][t].astype(np.float32),
++                            demo["force_grid_geometric_right"][t].astype(np.float32),
++                        ],
++                        axis=0,
++                    )
++                else:
++                    fL = demo["force_geometric_left"][t].astype(np.float32)  # (3,)
++                    fR = demo["force_geometric_right"][t].astype(np.float32)  # (3,)
++                    grid = np.stack([fL, fR], axis=0)[:, None, None, :] * scale
++                    grid = np.broadcast_to(grid, (args.num_fingertips, H, W, 3)).copy().astype(np.float32)
+ 
+                 # Build frame dict
+                 frame = {
+@@ -249,6 +333,11 @@ def main():
+                     frame["debug.base_pos_w"] = base_pos_w
+                     frame["debug.base_quat_w"] = base_quat_w
+ 
++                if args.store_photometric_resultant_force:
++                    frame["observation.tactile.resultant_force"] = build_resultant_force_photometric_rgb(
++                        demo["tactile_left"][t], demo["tactile_right"][t]
++                    )
++
+                 ds.add_frame(frame)
+ 
+             ds.save_episode()
+diff --git a/scripts/environments/state_machine/pick_place_basket_tacex_sm.py b/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+index b4d019f3..9e706f68 100644
+--- a/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
++++ b/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+@@ -105,6 +105,32 @@ def _compute_pseudo_force_geometric(height_map: torch.Tensor) -> torch.Tensor:
+     return torch.stack([Fx, Fy, Fz])
+ 
+ 
++def _compute_local_force_grid_from_height_map(height_map: torch.Tensor) -> np.ndarray:
++    """Compute a local 10x12x3 pseudo-force grid from tactile height map.
++
++    This mirrors the eval-time tactile representation:
++    - Fx/Fy come from normalized deformation gradients
++    - Fz comes from normalized deformation depth
++    """
++    hmap = height_map.detach().cpu().numpy().astype(np.float32)
++    baseline = float(hmap.max())
++    deformation = np.clip(baseline - hmap, 0.0, None)
++    grad_y, grad_x = np.gradient(deformation)
++
++    grad_x = np.clip(grad_x / (np.abs(grad_x).max() + 1e-6), -1.0, 1.0)
++    grad_y = np.clip(grad_y / (np.abs(grad_y).max() + 1e-6), -1.0, 1.0)
++    fz = deformation / (deformation.max() + 1e-6)
++
++    return np.stack(
++        [
++            cv2.resize(grad_x, (12, 10), interpolation=cv2.INTER_LINEAR),
++            cv2.resize(grad_y, (12, 10), interpolation=cv2.INTER_LINEAR),
++            cv2.resize(fz, (12, 10), interpolation=cv2.INTER_LINEAR),
++        ],
++        axis=-1,
++    ).astype(np.float32)
++
++
+ def _compute_pseudo_force_photometric(tactile_rgb: torch.Tensor) -> torch.Tensor:
+     """Compute 3D pseudo-force from tactile RGB (photometric method).
+     
+@@ -124,7 +150,8 @@ def _compute_pseudo_force_photometric(tactile_rgb: torch.Tensor) -> torch.Tensor
+     normal_scale = 100.0
+     
+     Fx = grad_x * rgb_deviation * shear_scale
+-    Fy = grad_y * rgb_deviation * normal_scale
++    # Match `gelsight_pseudo_force_photometric` in pick_place_basket/mdp/tacex_observations.py
++    Fy = grad_y * rgb_deviation * shear_scale
+     Fz = rgb_deviation * normal_scale
+     
+     return torch.stack([Fx, Fy, Fz])
+@@ -970,7 +997,7 @@ def _check_success_from_buffer(buf: dict) -> bool:
+ 
+ class DataRecorder:
+     """Records video, joints, tactile, and actions for imitation learning."""
+-    
++
+     def __init__(
+         self,
+         output_dir: str,
+@@ -999,7 +1026,6 @@ class DataRecorder:
+         if self.save_failed_videos:
+             os.makedirs(self.failed_video_dir, exist_ok=True)
+         os.makedirs(self.meta_dir, exist_ok=True)
+-        
+         with h5py.File(self.output_file, "w") as f:
+             f.create_group("data")
+             f.attrs["format"] = "pick_place_basket_tacex"
+@@ -1009,6 +1035,10 @@ class DataRecorder:
+             f.attrs["state_schema"] = "joint_state_9d:[arm_joint_pos(7),gripper_qpos(2)]"
+             f.attrs["action_schema"] = "joint_action_8d:[arm_joint_pos_target_abs(7),gripper_cmd(1)]"
+             f.attrs["teacher_control_mode"] = "ik_rel"
++            f.attrs["tactile_raw_schema"] = (
++                "tactile_rgb:[256,256,3],height_map:[256,256],"
++                "force_geometric:[3],force_grid_geometric:[10,12,3],force_photometric:[3]"
++            )
+     
+     def _empty_buffer(self):
+         return {
+@@ -1029,8 +1059,12 @@ class DataRecorder:
+             "rgb_table": [],
+             "tactile_left": [],
+             "tactile_right": [],
++            "height_map_left": [],
++            "height_map_right": [],
+             "force_geometric_left": [],
+             "force_geometric_right": [],
++            "force_grid_geometric_left": [],
++            "force_grid_geometric_right": [],
+             "force_photometric_left": [],
+             "force_photometric_right": [],
+             "phase_id": [],
+@@ -1179,7 +1213,7 @@ class DataRecorder:
+             for key, data in buf.items():
+                 if len(data) > 0:
+                     arr = np.stack(data)
+-                    if "rgb" in key or "tactile" in key:
++                    if "rgb" in key or "tactile" in key or "height_map" in key or "force_grid" in key:
+                         g.create_dataset(key, data=arr, compression="gzip", compression_opts=4)
+                     else:
+                         g.create_dataset(key, data=arr)
+@@ -1343,7 +1377,7 @@ def main():
+     episode_step_count = torch.zeros(env.num_envs, dtype=torch.int32, device=env.device)
+     
+     demo_count = 0
+-    
++
+     print(f"[INFO] Running {args_cli.num_demos} demos with {args_cli.num_envs} parallel environments")
+     print(f"[INFO] Saving to: {args_cli.output_dir}" if args_cli.save_demos else "[INFO] Not saving")
+     if recorder:
+@@ -1458,12 +1492,16 @@ def main():
+                         if has_gsmini_left:
+                             hmap = env.scene.sensors["gsmini_left"].data.output.get("height_map")
+                             if hmap is not None and hmap.numel() > 0:
++                                step_data["height_map_left"] = hmap[i].detach().cpu().numpy().astype(np.float16)
+                                 step_data["force_geometric_left"] = _compute_pseudo_force_geometric(hmap[i]).cpu().numpy()
++                                step_data["force_grid_geometric_left"] = _compute_local_force_grid_from_height_map(hmap[i])
+                         
+                         if has_gsmini_right:
+                             hmap = env.scene.sensors["gsmini_right"].data.output.get("height_map")
+                             if hmap is not None and hmap.numel() > 0:
++                                step_data["height_map_right"] = hmap[i].detach().cpu().numpy().astype(np.float16)
+                                 step_data["force_geometric_right"] = _compute_pseudo_force_geometric(hmap[i]).cpu().numpy()
++                                step_data["force_grid_geometric_right"] = _compute_local_force_grid_from_height_map(hmap[i])
+                         
+                         # Tactile pseudo-force - PHOTOMETRIC (from tactile_rgb)
+                         if has_gsmini_left:
+@@ -1578,4 +1616,3 @@ def main():
+ if __name__ == "__main__":
+     main()
+     simulation_app.close()
+-
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+index d526e557..79d93499 100644
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@ -60,6 +60,20 @@ def parse_args():
+             "'/NVIDIA/Assets/Skies/Indoor/'."
+         ),
+     )
++    parser.add_argument(
++        "--tactile-grid-source",
++        choices=("height_map", "photometric_rgb"),
++        default="height_map",
++        help=(
++            "Source for tactile_force_grid. Use photometric_rgb for checkpoints trained from "
++            "--tactile-source=photometric_rgb_grid."
++        ),
++    )
++    parser.add_argument(
++        "--send-tactile-resultant-force",
++        action="store_true",
++        help="Include obs['tactile_resultant_force'] for policies trained with observation.tactile.resultant_force.",
++    )
+     
+     # AppLauncher args are added here
+     from isaaclab.app import AppLauncher
+@@ -108,12 +122,16 @@ class IsaacLabEnvWrapper:
+         img_height: int = 224,
+         img_width: int = 224,
+         background_texture: str = "small_empty_house_4k.hdr",
++        tactile_grid_source: str = "height_map",
++        send_tactile_resultant_force: bool = False,
+     ):
+         self.env_name = env_name
+         self.device = device
+         self.img_height = img_height
+         self.img_width = img_width
+         self.background_texture = background_texture
++        self.tactile_grid_source = tactile_grid_source
++        self.send_tactile_resultant_force = send_tactile_resultant_force
+         self.env = None
+         self._step_count = 0
+         self._max_episode_steps = 300
+@@ -235,21 +253,37 @@ class IsaacLabEnvWrapper:
+             if rgb is not None and rgb.numel() > 0:
+                 obs["rgb_wrist"] = self._process_image(rgb[0])
+         
+-        # Tactile pseudo-force grid (2 fingertips x 10 x 12 x 3)
+-        # We compute this from height maps when available
++        # Tactile grid (2 fingertips x 10 x 12 x 3). Keep this source aligned with
++        # the LeRobot dataset conversion used for the checkpoint.
+         force_grid = np.zeros((2, 10, 12, 3), dtype=np.float32)
+-        
+-        if self.has_gsmini_left:
+-            hmap = self.env.scene.sensors["gsmini_left"].data.output.get("height_map")
+-            if hmap is not None and hmap.numel() > 0:
+-                force_grid[0] = self._compute_force_grid(hmap[0])
+-        
+-        if self.has_gsmini_right:
+-            hmap = self.env.scene.sensors["gsmini_right"].data.output.get("height_map")
+-            if hmap is not None and hmap.numel() > 0:
+-                force_grid[1] = self._compute_force_grid(hmap[0])
++
++        if self.tactile_grid_source == "photometric_rgb":
++            for idx, sname in enumerate(("gsmini_left", "gsmini_right")):
++                if sname in self.env.scene.sensors:
++                    tac = self.env.scene.sensors[sname].data.output.get("tactile_rgb")
++                    if tac is not None and tac.numel() > 0:
++                        force_grid[idx] = self._compute_tactile_rgb_grid(tac[0], 10, 12)
++        else:
++            if self.has_gsmini_left:
++                hmap = self.env.scene.sensors["gsmini_left"].data.output.get("height_map")
++                if hmap is not None and hmap.numel() > 0:
++                    force_grid[0] = self._compute_force_grid(hmap[0])
++
++            if self.has_gsmini_right:
++                hmap = self.env.scene.sensors["gsmini_right"].data.output.get("height_map")
++                if hmap is not None and hmap.numel() > 0:
++                    force_grid[1] = self._compute_force_grid(hmap[0])
+         
+         obs["tactile_force_grid"] = force_grid
++
++        if self.send_tactile_resultant_force:
++            resultant = np.zeros((2, 3), dtype=np.float32)
++            for idx, sname in enumerate(("gsmini_left", "gsmini_right")):
++                if sname in self.env.scene.sensors:
++                    tac = self.env.scene.sensors[sname].data.output.get("tactile_rgb")
++                    if tac is not None and tac.numel() > 0:
++                        resultant[idx] = self._compute_pseudo_force_photometric(tac[0])
++            obs["tactile_resultant_force"] = resultant
+         
+         # Add placeholder images if cameras not available
+         if "rgb_table" not in obs:
+@@ -321,6 +355,45 @@ class IsaacLabEnvWrapper:
+         ], axis=-1)
+         
+         return force_grid.astype(np.float32)
++
++    def _tactile_rgb_tensor_to_float_hwc(self, tac: torch.Tensor) -> np.ndarray:
++        """Convert simulator tactile_rgb tensor to float32 HWC RGB in [0, 1]."""
++        x = tac.detach().cpu().numpy()
++        if x.ndim != 3:
++            raise ValueError(f"tactile_rgb tensor expected rank 3, got shape={tuple(x.shape)}")
++        if x.shape[0] in (1, 3, 4) and x.shape[0] < x.shape[1] and x.shape[0] < x.shape[2]:
++            x = np.transpose(x, (1, 2, 0))
++        if x.shape[-1] < 3:
++            raise ValueError(f"tactile_rgb tensor expected >=3 channels, got shape={tuple(x.shape)}")
++        x = x[..., :3].astype(np.float32)
++        if np.nanmax(x) > 1.5:
++            x = x / 255.0
++        return np.clip(np.nan_to_num(x, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0)
++
++    def _compute_tactile_rgb_grid(self, tac: torch.Tensor, out_h: int, out_w: int) -> np.ndarray:
++        """Match photometric_rgb_grid conversion: raw TacEx RGB downsampled to grid."""
++        rgb = self._tactile_rgb_tensor_to_float_hwc(tac)
++        return cv2.resize(rgb, (out_w, out_h), interpolation=cv2.INTER_AREA).astype(np.float32)
++
++    def _compute_pseudo_force_photometric(self, tac: torch.Tensor) -> np.ndarray:
++        """Compute the same RGB-statistics resultant used by the photometric raw fields."""
++        rgb = self._tactile_rgb_tensor_to_float_hwc(tac)
++        rgb_centered = rgb - 0.5
++        rgb_deviation = float(np.abs(rgb_centered).mean())
++        # Match observation.tactile.resultant_force in the current photometric LeRobot dataset.
++        shear_scale = 4.0
++        normal_scale = 2.0
++        fx = float(rgb_centered[..., 0].mean()) * rgb_deviation * shear_scale
++        fy = float(rgb_centered[..., 1].mean()) * rgb_deviation * shear_scale
++        fz = rgb_deviation * normal_scale
++        return np.array([fx, fy, fz], dtype=np.float32)
++
++    def render_rgb_array(self) -> np.ndarray:
++        """Return a video frame for remote eval rendering."""
++        obs = self._extract_observation()
++        rgb_table = np.asarray(obs["rgb_table"], dtype=np.uint8)
++        rgb_wrist = np.asarray(obs["rgb_wrist"], dtype=np.uint8)
++        return np.concatenate([rgb_table, rgb_wrist], axis=1)
+     
+     def reset(self, seed: int | None = None) -> dict:
+         """Reset environment and return observation."""
+@@ -371,8 +444,9 @@ class IsaacLabEnvWrapper:
+         
+         # Extract scalar values
+         reward_val = float(reward[0].item()) if torch.is_tensor(reward) else float(reward)
+-        done = bool(terminated[0].item()) if torch.is_tensor(terminated) else bool(terminated)
+-        done = done or (bool(truncated[0].item()) if torch.is_tensor(truncated) else bool(truncated))
++        terminated_now = bool(terminated[0].item()) if torch.is_tensor(terminated) else bool(terminated)
++        truncated_now = bool(truncated[0].item()) if torch.is_tensor(truncated) else bool(truncated)
++        done = terminated_now or truncated_now
+         
+         # Check for max steps
+         if self._step_count >= self._max_episode_steps:
+@@ -380,68 +454,42 @@ class IsaacLabEnvWrapper:
+         
+         obs = self._extract_observation()
+         
+-        # Check success (cube in basket)
+-        is_success = self._check_success()
++        # Keep the upstream `_check_success()` hook, but back it with the
++        # task's authoritative termination semantics instead of handwritten
++        # geometry thresholds.
++        is_success = self._check_success(terminated_now, truncated_now)
+         
+         info_dict = {"step": self._step_count, "is_success": is_success}
+         
+         return obs, reward_val, done, info_dict
+     
+-    def _check_success(self) -> bool:
+-        """
+-        Check if task is successful: cube is inside the basket.
+-        
+-        Success criteria:
+-        - Cube XY position is within basket XY bounds (with margin)
+-        - Cube Z is below basket rim but above basket bottom
+-        """
++    def _get_term_flag(self, term_name: str) -> bool | None:
++        """Return a named termination flag when the task exposes it."""
+         try:
+-            # InteractiveScene is index-based (scene["name"]), not dict.get().
+-            cube = None
+-            basket = None
+-            robot = None
+-            for key in ("cube", "object"):
+-                try:
+-                    cube = self.env.scene[key]
+-                    break
+-                except Exception:
+-                    continue
+-            for key in ("basket", "goal"):
+-                try:
+-                    basket = self.env.scene[key]
+-                    break
+-                except Exception:
+-                    continue
+-            for key in ("robot",):
+-                try:
+-                    robot = self.env.scene[key]
+-                    break
+-                except Exception:
+-                    continue
+-
+-            if cube is None or basket is None or robot is None:
+-                logger.debug("Could not resolve cube/basket/robot in scene for success check")
+-                return False
+-
+-            # Positions relative to env origin.
+-            env_origin = self.env.scene.env_origins[0]
+-            cube_pos = (cube.data.root_pos_w[0] - env_origin).cpu().numpy()
+-            basket_pos = (basket.data.root_pos_w[0] - env_origin).cpu().numpy()
+-
+-            # Match task termination logic approximately.
+-            xy_dist = float(np.linalg.norm(cube_pos[:2] - basket_pos[:2]))
+-            height_dist = float(cube_pos[2] - basket_pos[2])
+-            in_basket = (xy_dist < 0.08) and (height_dist > 0.0) and (height_dist < (0.02 + 0.05))
+-
+-            # Require released/open gripper (same intent as task termination).
+-            gripper_pos = robot.data.joint_pos[0, -2:].detach().cpu().numpy()
+-            gripper_open = (abs(gripper_pos[0] - 0.04) < 0.005) and (abs(gripper_pos[1] - 0.04) < 0.005)
++            termination_manager = getattr(self.env, "termination_manager", None)
++            if termination_manager is None or term_name not in termination_manager.active_terms:
++                return None
++            value = termination_manager.get_term(term_name)
++            if torch.is_tensor(value):
++                return bool(value[0].item())
++            return bool(value)
++        except Exception as e:
++            logger.debug(f"Termination term lookup failed for {term_name}: {e}")
++            return None
+ 
+-            return bool(in_basket and gripper_open)
++    def _check_success(self, terminated_now: bool, truncated_now: bool) -> bool:
++        """Emit success only on the step where the official task episode ends."""
++        if not (terminated_now or truncated_now):
++            return False
+ 
+-        except Exception as e:
+-            logger.debug(f"Success check failed: {e}")
++        success = self._get_term_flag("success")
++        if success is None:
++            logger.warning("Authoritative success term is unavailable; reporting is_success=False.")
+             return False
++
++        cube_drop = self._get_term_flag("cube_dropping")
++        basket_drop = self._get_term_flag("basket_dropping")
++        return bool(success and not cube_drop and not basket_drop)
+     
+     def close(self):
+         """Close the environment."""
+@@ -543,8 +591,7 @@ class EvalServer:
+             return {"status": "closing"}
+         
+         elif cmd == "render":
+-            # Return current frame if available
+-            return {"frame": None}
++            return {"obs": {"_render_rgb": self.env.render_rgb_array()}}
+         
+         else:
+             return {"error": f"Unknown command: {cmd}"}
+@@ -621,6 +668,8 @@ def main():
+         img_height=args_cli.img_height,
+         img_width=args_cli.img_width,
+         background_texture=args_cli.background_texture,
++        tactile_grid_source=args_cli.tactile_grid_source,
++        send_tactile_resultant_force=args_cli.send_tactile_resultant_force,
+     )
+     
+     # Start server
+
+diff --git a/scripts/environments/state_machine/pick_place_basket_tacex_sm.py b/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+index 9e706f68..b68b3a01 100644
+--- a/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
++++ b/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+@@ -1039,6 +1039,7 @@ class DataRecorder:
+                 "tactile_rgb:[256,256,3],height_map:[256,256],"
+                 "force_geometric:[3],force_grid_geometric:[10,12,3],force_photometric:[3]"
+             )
++            f.attrs["torque_schema"] = "gripper_torque:[1], mean of the two gripper joint torques"
+     
+     def _empty_buffer(self):
+         return {
+@@ -1065,4 +1066,5 @@ class DataRecorder:
+             "force_photometric_left": [],
+             "force_photometric_right": [],
+             "phase_id": [],
++            "gripper_torque": [],
+         }
+@@ -1503,5 +1505,22 @@ def main():
+                                 step_data["force_geometric_right"] = _compute_pseudo_force_geometric(hmap[i]).cpu().numpy()
+                                 step_data["force_grid_geometric_right"] = _compute_local_force_grid_from_height_map(hmap[i])
+                         
++                        # Raw gripper torque for time-window conditioning.
++                        # Prefer IsaacLab's applied_torque; fall back to joint_effort for older builds.
++                        try:
++                            robot = env.scene["robot"]
++                            torque = getattr(robot.data, "applied_torque", None)
++                            if torque is None:
++                                torque = getattr(robot.data, "joint_effort", None)
++                            if torque is None:
++                                raise AttributeError("robot.data has neither applied_torque nor joint_effort")
++                            torque_np = torque[i].detach().cpu().numpy().astype(np.float32)
++                            if torque_np.shape[0] >= 2:
++                                step_data["gripper_torque"] = np.array([float(torque_np[-2:].mean())], dtype=np.float32)
++                            else:
++                                step_data["gripper_torque"] = np.zeros((1,), dtype=np.float32)
++                        except Exception:
++                            step_data["gripper_torque"] = np.zeros((1,), dtype=np.float32)
++
+                         # Tactile pseudo-force - PHOTOMETRIC (from tactile_rgb)
+                         if has_gsmini_left:
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+index 79d93499..8092202 100644
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@ -74,5 +74,16 @@ def parse_args():
+         action="store_true",
+         help="Include obs['tactile_resultant_force'] for policies trained with observation.tactile.resultant_force.",
+     )
++    parser.add_argument(
++        "--send-gripper-torque-window",
++        action="store_true",
++        help="Include obs['gripper_torque'] as a rolling [window,1] torque sequence for the action expert.",
++    )
++    parser.add_argument(
++        "--torque-window-size",
++        type=int,
++        default=32,
++        help="Number of simulator steps kept in the rolling torque observation window.",
++    )
+     
+     # AppLauncher args are added here
+@@ -136,5 +147,7 @@ class IsaacLabEnvWrapper:
+         background_texture: str = "small_empty_house_4k.hdr",
+         tactile_grid_source: str = "height_map",
+         send_tactile_resultant_force: bool = False,
++        send_gripper_torque_window: bool = False,
++        torque_window_size: int = 32,
+     ):
+         self.env_name = env_name
+@@ -146,5 +159,8 @@ class IsaacLabEnvWrapper:
+         self.background_texture = background_texture
+         self.tactile_grid_source = tactile_grid_source
+         self.send_tactile_resultant_force = send_tactile_resultant_force
++        self.send_gripper_torque_window = send_gripper_torque_window
++        self.torque_window_size = torque_window_size
++        self._gripper_torque_history: list[np.ndarray] = []
+         self.env = None
+         self._step_count = 0
+@@ -289,5 +305,9 @@ class IsaacLabEnvWrapper:
+                         resultant[idx] = self._compute_pseudo_force_photometric(tac[0])
+             obs["tactile_resultant_force"] = resultant
+         
++        if self.send_gripper_torque_window:
++            self._append_current_gripper_torque()
++            obs["gripper_torque"] = self._get_padded_gripper_torque_window()
++
+         # Add placeholder images if cameras not available
+         if "rgb_table" not in obs:
+@@ -356,3 +376,33 @@ class IsaacLabEnvWrapper:
+         return np.stack([fx, fy, fz], axis=-1)
+         
+         return force_grid.astype(np.float32)
++
++    def _read_joint_torque(self) -> np.ndarray:
++        try:
++            robot = self.env.scene["robot"]
++            torque = getattr(robot.data, "applied_torque", None)
++            if torque is None:
++                torque = getattr(robot.data, "joint_effort", None)
++            if torque is None:
++                raise AttributeError("robot.data has neither applied_torque nor joint_effort")
++            return torque[0].detach().cpu().numpy().astype(np.float32)
++        except Exception as e:
++            logger.debug(f"Could not read robot torque: {e}")
++            return np.zeros((9,), dtype=np.float32)
++
++    def _append_current_gripper_torque(self) -> None:
++        torque = self._read_joint_torque()
++        if torque.shape[0] >= 2:
++            value = np.array([float(torque[-2:].mean())], dtype=np.float32)
++        else:
++            value = np.zeros((1,), dtype=np.float32)
++        self._gripper_torque_history.append(value)
++        if len(self._gripper_torque_history) > self.torque_window_size:
++            self._gripper_torque_history = self._gripper_torque_history[-self.torque_window_size :]
++
++    def _get_padded_gripper_torque_window(self) -> np.ndarray:
++        window = np.zeros((self.torque_window_size, 1), dtype=np.float32)
++        if self._gripper_torque_history:
++            hist = np.stack(self._gripper_torque_history[-self.torque_window_size :], axis=0).astype(np.float32)
++            window[-hist.shape[0] :] = hist
++        return window
+@@ -438,2 +487,3 @@ class IsaacLabEnvWrapper:
+     def reset(self, seed: int | None = None) -> dict:
+         """Reset environment and return observation."""
++        self._gripper_torque_history = []
+@@ -670,5 +720,7 @@ def main():
+         background_texture=args_cli.background_texture,
+         tactile_grid_source=args_cli.tactile_grid_source,
+         send_tactile_resultant_force=args_cli.send_tactile_resultant_force,
++        send_gripper_torque_window=args_cli.send_gripper_torque_window,
++        torque_window_size=args_cli.torque_window_size,
+     )
+     

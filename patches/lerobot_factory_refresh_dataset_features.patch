@@ -1,0 +1,17 @@
+diff --git a/src/lerobot/policies/factory.py b/src/lerobot/policies/factory.py
+--- a/src/lerobot/policies/factory.py
++++ b/src/lerobot/policies/factory.py
+@@ -527,3 +527,10 @@ def make_policy(
+-    cfg.output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
+-    if not cfg.input_features:
+-        cfg.input_features = {key: ft for key, ft in features.items() if key not in cfg.output_features}
++    dataset_output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
++    dataset_input_features = {key: ft for key, ft in features.items() if key not in dataset_output_features}
++
++    # The pretrained config describes its original dataset. Refresh the schema
++    # from the active dataset so newly added observations such as the causal
++    # gripper-torque window are present before policy validation.
++    if rename_map:
++        dataset_input_features = {rename_map.get(key, key): ft for key, ft in dataset_input_features.items()}
++    cfg.output_features = dataset_output_features
++    cfg.input_features = dataset_input_features
