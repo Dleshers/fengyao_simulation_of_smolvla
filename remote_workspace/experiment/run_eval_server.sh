@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ISAAC_ENV="${ISAAC_ENV:-$ROOT/.conda/isaaclab}"
 MODE="${1:-torque}"
-CONTROL_MODE="${CONTROL_MODE:-ik_rel}"
+CONTROL_MODE="${CONTROL_MODE:-joint}"
 EXTRA=()
 if [[ "$MODE" == "torque" ]]; then
   EXTRA+=(--send-gripper-torque-window --torque-window-size 30)

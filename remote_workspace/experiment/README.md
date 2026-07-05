@@ -20,12 +20,19 @@ Required inputs:
 3. A standalone causal LSTM checkpoint matching `[B,30,1] -> [B,16]`.
 4. A GPU session where `nvidia-smi` succeeds.
 
+Run source, GPU, storage and optional Isaac launch checks before collection:
+
+```bash
+RUN_ISAAC_SMOKE=1 bash experiment/preflight_collection.sh
+```
+
 ```bash
 .venv/lerobot/bin/python experiment/validate_dataset.py \
   --repo-id "$DATASET_REPO_ID" --root "$DATASET_ROOT"
 
 .venv/lerobot/bin/python -m pytest -q \
-  lerobot-tactile/tests/policies/smolvla/test_smolvla_torque_lstm.py
+  lerobot-tactile/tests/policies/smolvla/test_smolvla_torque_lstm.py \
+  experiment/test_validate_dataset_windows.py
 ```
 
 The torque sample must be float32 with trailing shape `[30,1]`. Index `-1`
@@ -63,6 +70,9 @@ Terminal B:
 ```bash
 VISUAL_POLICY=/path/to/visual TORQUE_POLICY=/path/to/torque experiment/eval_pair.sh
 ```
+
+The evaluation scripts default to `CONTROL_MODE=joint`, matching the authoritative 9D-state/8D-action
+interface. Do not override this with `ik_rel` for the controlled experiment.
 
 Run at least seeds 1000, 1001 and 1002. Compare success, drops, collisions,
 action differences, peak joint velocity/acceleration, safety violations and videos.

@@ -16,6 +16,7 @@ SEED="${SEED:-1000}"
 PHASE="${1:-all}"
 
 collect() {
+  bash "$ROOT/experiment/preflight_collection.sh"
   if [[ -e "$RAW_DIR/data.hdf5" ]]; then
     echo "Refusing to overwrite existing raw dataset: $RAW_DIR/data.hdf5" >&2
     exit 2
@@ -30,6 +31,7 @@ collect() {
       --enable_cameras --headless \
       --experience=isaacsim_4_5/isaaclab.python.headless.rendering.kit \
       --kit_args=--/app/useFabricSceneDelegate=0
+  "$LEROBOT_ENV/bin/python" "$ROOT/experiment/inspect_raw_hdf5.py" "$RAW_DIR/data.hdf5"
 }
 
 convert() {
@@ -39,6 +41,7 @@ convert() {
     echo "Raw HDF5 does not exist: $input" >&2
     exit 2
   fi
+  "$LEROBOT_ENV/bin/python" "$ROOT/experiment/inspect_raw_hdf5.py" "$input"
   if [[ -e "$output" ]]; then
     echo "Refusing to overwrite existing LeRobot dataset: $output" >&2
     exit 2

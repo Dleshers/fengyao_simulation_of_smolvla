@@ -28,12 +28,14 @@ fi
   -e "$ROOT/TacEx/source/tacex" \
   -e "$ROOT/TacEx/source/tacex_assets" \
   -e "$ROOT/TacEx/source/tacex_tasks"
+"$ISAAC_ENV/bin/pip" install h5py
 
 if [[ ! -x "$LEROBOT_ENV/bin/python" ]]; then
   "$ISAAC_ENV/bin/python" -m venv "$LEROBOT_ENV"
 fi
 "$LEROBOT_ENV/bin/pip" install --upgrade pip setuptools wheel
 "$LEROBOT_ENV/bin/pip" install -e "$ROOT/lerobot-tactile[smolvla]"
+"$LEROBOT_ENV/bin/pip" install h5py pytest
 
 echo "Accept the Isaac Sim EULA once with:"
 echo "  printf 'yes\\n' | $ISAAC_ENV/bin/python -c 'import isaacsim'"

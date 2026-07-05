@@ -9,7 +9,7 @@ LEROBOT_ENV="${LEROBOT_ENV:-$ROOT/.venv/lerobot}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/cs/student/project_msc/2025/rai/fenzhang/simulation_storage/gripper_lstm_experiments}"
 EPISODES="${EPISODES:-10}"
 SEED="${SEED:-1000}"
-CONTROL_MODE="${CONTROL_MODE:-ik_rel}"
+CONTROL_MODE="${CONTROL_MODE:-joint}"
 export HF_HOME="${HF_HOME:-$ROOT/.cache/huggingface}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$ROOT/.cache}"
 

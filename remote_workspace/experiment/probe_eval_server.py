@@ -11,7 +11,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=5555)
-    parser.add_argument("--control-mode", choices=("ik_rel", "joint"), default="ik_rel")
+    parser.add_argument("--control-mode", choices=("ik_rel", "joint"), default="joint")
     args = parser.parse_args()
 
     env = IsaacLabTactileRemoteEnv(
