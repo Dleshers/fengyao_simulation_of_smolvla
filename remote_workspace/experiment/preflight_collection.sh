@@ -50,8 +50,22 @@ grep -q 'def prepare_torque_window' \
 
 if [[ "${RUN_ISAAC_SMOKE:-0}" == "1" ]]; then
   echo "== Isaac headless smoke =="
-  OMNI_KIT_ACCEPT_EULA=YES TERM=xterm TMPDIR="$ROOT/tmp" \
-    "$ISAAC_ENV/bin/python" "$ROOT/IsaacLab-Tactile/scripts/tutorials/00_sim/create_empty.py" --headless
+  smoke_log="$ROOT/tmp/isaac_headless_smoke.log"
+  set +e
+  OMNI_KIT_ACCEPT_EULA=YES TERM=xterm TMPDIR="$ROOT/tmp" PYTHONUNBUFFERED=1 \
+    timeout --kill-after=10s 45s \
+    "$ISAAC_ENV/bin/python" "$ROOT/IsaacLab-Tactile/scripts/tutorials/00_sim/create_empty.py" --headless \
+    2>&1 | tee "$smoke_log"
+  smoke_status=${PIPESTATUS[0]}
+  set -e
+  if [[ "$smoke_status" -eq 124 ]] \
+      && grep -q 'Graphics API: Vulkan' "$smoke_log" \
+      && grep -q 'NVIDIA GeForce RTX 4070 Ti SUPER' "$smoke_log"; then
+    echo "PASS: Isaac SimulationApp initialized Vulkan on the NVIDIA GPU; bounded smoke stopped after 45s."
+  elif [[ "$smoke_status" -ne 0 ]]; then
+    echo "ERROR: Isaac headless smoke failed with status $smoke_status" >&2
+    exit "$smoke_status"
+  fi
 else
   echo "Skipping Isaac launch smoke; set RUN_ISAAC_SMOKE=1 to enable it."
 fi

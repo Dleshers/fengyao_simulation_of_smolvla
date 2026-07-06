@@ -23,6 +23,7 @@ collect() {
   fi
   mkdir -p "$RAW_DIR" "$ROOT/tmp"
   cd "$ROOT/IsaacLab-Tactile"
+  set +e
   OMNI_KIT_ACCEPT_EULA=YES TERM=xterm TMPDIR="$ROOT/tmp" \
     "$ISAAC_ENV/bin/python" scripts/environments/state_machine/pick_place_basket_tacex_sm.py \
       --num_envs "$NUM_ENVS" --num_demos "$NUM_DEMOS" --seed "$SEED" \
@@ -31,6 +32,14 @@ collect() {
       --enable_cameras --headless \
       --experience=isaacsim_4_5/isaaclab.python.headless.rendering.kit \
       --kit_args=--/app/useFabricSceneDelegate=0
+  collection_status=$?
+  set -e
+  if [[ "$collection_status" -ne 0 && ! -s "$RAW_DIR/data.hdf5" ]]; then
+    echo "ERROR: collection exited with status $collection_status before producing HDF5" >&2
+    exit "$collection_status"
+  elif [[ "$collection_status" -ne 0 ]]; then
+    echo "WARNING: simulator cleanup exited with status $collection_status; auditing finalized HDF5"
+  fi
   "$LEROBOT_ENV/bin/python" "$ROOT/experiment/inspect_raw_hdf5.py" "$RAW_DIR/data.hdf5"
 }
 

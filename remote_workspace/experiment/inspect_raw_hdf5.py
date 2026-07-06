@@ -8,7 +8,7 @@ import numpy as np
 
 REQUIRED_FIELDS = {
     "actions": (8,),
-    "joint_pos": (7,),
+    "joint_pos": (9,),
     "gripper_pos": (2,),
     "gripper_torque": (1,),
     "rgb_table": (224, 224, 3),
