@@ -24,7 +24,7 @@ Torque data flow:
 
 ```text
 observation.gripper_torque [B, 30, 1]
-  -> 2-layer LSTM(input=1, hidden=64)
+  -> frozen 1-layer LSTM(input=1, hidden=32)
   -> final hidden state
   -> Linear(64, 16)
   -> LayerNorm(16)
@@ -66,10 +66,10 @@ Torque-LSTM:
 --policy.torque_window_key=observation.gripper_torque
 --policy.torque_window_size=30
 --policy.torque_input_dim=1
---policy.torque_lstm_hidden_dim=64
+--policy.torque_lstm_hidden_dim=32
 --policy.torque_lstm_output_dim=16
---policy.torque_lstm_num_layers=2
---policy.train_torque_lstm=true
+--policy.torque_lstm_num_layers=1
+--policy.train_torque_lstm=false
 ```
 
 Only the one-dimensional gripper signal is part of the current main experiment. Full-body joint torque is out of scope.
@@ -106,10 +106,11 @@ lerobot-train \
   --policy.torque_window_key=observation.gripper_torque \
   --policy.torque_window_size=30 \
   --policy.torque_input_dim=1 \
-  --policy.torque_lstm_hidden_dim=64 \
+  --policy.torque_lstm_hidden_dim=32 \
   --policy.torque_lstm_output_dim=16 \
-  --policy.torque_lstm_num_layers=2 \
-  --policy.train_torque_lstm=true \
+  --policy.torque_lstm_num_layers=1 \
+  --policy.torque_lstm_weights_path=YOUR_TORQUE_16D_ENCODER_PT \
+  --policy.train_torque_lstm=false \
   --seed=1000 \
   --batch_size=8 \
   --steps=20000 \

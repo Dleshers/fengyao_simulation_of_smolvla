@@ -41,6 +41,10 @@ Local verification completed on 2026-07-05:
 
 ## Current decision
 
+The authoritative LSTM configuration is `input=1, hidden=32, layers=1, output=16`, loaded from the
+verified standalone encoder and frozen during SmolVLA training. Any older `hidden=64`, `layers=2`,
+or `train_torque_lstm=true` instruction is obsolete.
+
 The released `visual_050000` and `torque_lstm_030000` checkpoints are incompatible with the final
 controlled interface. Keep them only as historical smoke-test artifacts. Do not use them for the
 reported visual-vs-torque comparison or as initialization checkpoints.

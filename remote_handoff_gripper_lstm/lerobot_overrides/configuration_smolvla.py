@@ -142,9 +142,9 @@ class SmolVLAConfig(PreTrainedConfig):
     torque_window_key: str = "observation.gripper_torque"
     torque_window_size: int = 30
     torque_input_dim: int = 1
-    torque_lstm_hidden_dim: int = 64
+    torque_lstm_hidden_dim: int = 32
     torque_lstm_output_dim: int = 16
-    torque_lstm_num_layers: int = 2
+    torque_lstm_num_layers: int = 1
     # The external encoder is frozen by default; the suffix projection remains trainable.
     train_torque_lstm: bool = False
 

@@ -6,8 +6,16 @@ from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
 from lerobot.policies.smolvla.modeling_smolvla import ForceLSTMEncoder
 
 
+def test_authoritative_torque_lstm_defaults():
+    config = SmolVLAConfig()
+    assert config.torque_lstm_hidden_dim == 32
+    assert config.torque_lstm_num_layers == 1
+    assert config.torque_lstm_output_dim == 16
+    assert config.train_torque_lstm is False
+
+
 def test_force_lstm_encoder_shape_and_gradient():
-    encoder = ForceLSTMEncoder(input_dim=1, hidden_dim=32, output_dim=16, num_layers=2)
+    encoder = ForceLSTMEncoder(input_dim=1, hidden_dim=32, output_dim=16, num_layers=1)
     latent = encoder(torch.randn(4, 30, 1))
     latent.square().mean().backward()
     assert latent.shape == (4, 16)

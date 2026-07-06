@@ -63,10 +63,11 @@ use_torque_lstm=true
 torque_window_key=observation.gripper_torque
 torque_window_size=30
 torque_input_dim=1
-torque_lstm_hidden_dim=64
+torque_lstm_hidden_dim=32
 torque_lstm_output_dim=16
-torque_lstm_num_layers=2
-train_torque_lstm=true
+torque_lstm_num_layers=1
+torque_lstm_weights_path=/cs/student/project_msc/2025/rai/fenzhang/simulation_storage/trained_lstm_weights/torque_16d_encoder.pt
+train_torque_lstm=false
 ```
 
 ## IsaacLab installation
@@ -93,7 +94,7 @@ Index `-1` is the newest sample. At episode startup, left-pad by repeating the f
 
 ## Files that are references only
 
-The files under `references/` explain the previous pipeline and original LSTM idea. Do not copy `reference_modeling_smolvla.py` over the current implementation: it injects the LSTM result into the VLM prefix, whereas this experiment requires an Action Expert suffix token.
+The files under `references/` explain the previous pipeline and original LSTM idea. Do not copy `reference_modeling_smolvla.py` over the current implementation: it uses the historical `hidden=64, layers=2` architecture and injects the LSTM result into the VLM prefix. The formal experiment requires `hidden=32, layers=1`, frozen, with an Action Expert suffix token.
 
 `REMOTE_CODEX_SETUP_TORQUE_WINDOW_SIM_LEGACY.md` describes the older flattened linear-window implementation. Use it only for repository and dependency context.
 

@@ -344,9 +344,9 @@ index 937168c..e646fa7 100644
 +    torque_window_key: str = "observation.gripper_torque"
 +    torque_window_size: int = 30
 +    torque_input_dim: int = 1
-+    torque_lstm_hidden_dim: int = 64
++    torque_lstm_hidden_dim: int = 32
 +    torque_lstm_output_dim: int = 16
-+    torque_lstm_num_layers: int = 2
++    torque_lstm_num_layers: int = 1
 +    # The external encoder is frozen by default; the suffix projection remains trainable.
 +    train_torque_lstm: bool = False
 +
@@ -399,7 +399,7 @@ index 568bdac..71611af 100644
 +class ForceLSTMEncoder(nn.Module):
 +    """Encode a causal gripper-torque window into one latent vector."""
 +
-+    def __init__(self, input_dim=1, hidden_dim=64, output_dim=16, num_layers=2):
++    def __init__(self, input_dim=1, hidden_dim=32, output_dim=16, num_layers=1):
 +        super().__init__()
 +        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
 +        self.fc = nn.Linear(hidden_dim, output_dim)

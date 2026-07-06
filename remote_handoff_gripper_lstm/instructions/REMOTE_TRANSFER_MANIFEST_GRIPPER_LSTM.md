@@ -59,13 +59,13 @@ simulation/SETUP_TUTORIAL_TACTILE_PIPELINE.md
 
 The first two files document the `[30,1]` signal and LSTM concept. The current implementation differs by placing the projected LSTM vector in the Action Expert suffix, not the VLM prefix.
 
-## Optional file
+## Required torque-encoder file
 
 ```text
 smolvla_20260603/smolvla_20260603/force_feedback_interface/trained_lstm_weights/torque_16d_encoder.pt
 ```
 
-This is not required for the main end-to-end experiment (`train_torque_lstm=true`). Transfer it only for a separately reported pretrained/frozen-LSTM ablation. Never silently load it in only one of the two primary experiments.
+This file is required for the formal torque experiment. Its architecture is `input=1, hidden=32, layers=1, output=16`; load it with `train_torque_lstm=false`. The visual baseline does not load or consume it.
 
 ## Files not to use for the main experiment
 
