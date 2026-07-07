@@ -26,4 +26,5 @@ OMNI_KIT_ACCEPT_EULA=YES TERM=xterm TMPDIR="$ROOT/tmp" "$ISAAC_ENV/bin/python" s
   --enable_cameras --headless \
   --experience=isaacsim_4_5/isaaclab.python.headless.rendering.kit \
   --kit_args=--/app/useFabricSceneDelegate=0 \
+  ${TRAJECTORY_LOG:+--trajectory-log="$TRAJECTORY_LOG"} \
   "${EXTRA[@]}"

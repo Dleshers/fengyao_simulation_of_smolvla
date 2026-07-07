@@ -1,0 +1,844 @@
+diff --git a/src/lerobot/envs/configs.py b/src/lerobot/envs/configs.py
+index c3fb8e9..301692c 100644
+--- a/src/lerobot/envs/configs.py
++++ b/src/lerobot/envs/configs.py
+@@ -574,6 +574,10 @@ class IsaacLabTactileRemoteEnv(EnvConfig):
+     # Tactile configuration
+     tactile_force_grid_shape: tuple[int, ...] = (2, 10, 12, 3)
+     tactile_resultant_force_shape: tuple[int, ...] | None = None
++    torque_window_size: int = 30
++    gripper_torque_key: str = "gripper_torque"
++    include_gripper_torque_window: bool = False
++    control_mode: str = "ik_rel"
+ 
+     # Raw observation keys
+     eef_pos_key: str = "eef_pos"
+@@ -589,12 +593,12 @@ class IsaacLabTactileRemoteEnv(EnvConfig):
+     features_map: dict[str, str] = field(default_factory=dict)
+ 
+     def __post_init__(self):
+-        # Set action feature (7D)
+-        self.features[ACTION] = PolicyFeature(type=FeatureType.ACTION, shape=(7,))
++        action_dim = 8 if self.control_mode == "joint" else 7
++        state_dim = 9 if self.control_mode == "joint" else 11
++        self.features[ACTION] = PolicyFeature(type=FeatureType.ACTION, shape=(action_dim,))
+         self.features_map[ACTION] = ACTION
+ 
+-        # Set state feature (11D)
+-        self.features[OBS_STATE] = PolicyFeature(type=FeatureType.STATE, shape=(11,))
++        self.features[OBS_STATE] = PolicyFeature(type=FeatureType.STATE, shape=(state_dim,))
+         self.features_map[OBS_STATE] = OBS_STATE
+ 
+         # Add camera features
+@@ -626,10 +630,18 @@ class IsaacLabTactileRemoteEnv(EnvConfig):
+             )
+             self.features_map[rf_key] = rf_key
+ 
++        if self.include_gripper_torque_window:
++            torque_key = "observation.gripper_torque"
++            self.features[torque_key] = PolicyFeature(type=FeatureType.ENV, shape=(self.torque_window_size, 1))
++            self.features_map[torque_key] = torque_key
++
+     @property
+     def gym_kwargs(self) -> dict:
+         return {
+             "server_host": self.server_host,
+             "server_port": self.server_port,
+             "timeout_ms": self.timeout_ms,
++            "include_gripper_torque_window": self.include_gripper_torque_window,
++            "torque_window_size": self.torque_window_size,
++            "control_mode": self.control_mode,
+         }
+diff --git a/src/lerobot/envs/factory.py b/src/lerobot/envs/factory.py
+index 018d2ab..09ab451 100644
+--- a/src/lerobot/envs/factory.py
++++ b/src/lerobot/envs/factory.py
+@@ -33,6 +33,7 @@ from lerobot.envs.configs import (
+ from lerobot.envs.utils import _call_make_env, _download_hub_file, _import_hub_module, _normalize_hub_result
+ from lerobot.policies.xvla.configuration_xvla import XVLAConfig
+ from lerobot.processor import ProcessorStep
++from lerobot.processor.converters import create_transition, transition_to_batch
+ from lerobot.processor.env_processor import (
+     IsaaclabArenaProcessorStep,
+     IsaacLabTactilePolicyActionProcessorStep,
+@@ -42,6 +43,14 @@ from lerobot.processor.env_processor import (
+ from lerobot.processor.pipeline import PolicyProcessorPipeline
+ 
+ 
++def _isaaclab_observation_to_transition(observation: dict[str, Any]) -> dict[str, Any]:
++    """Keep raw IsaacLab keys as observations while preserving the language task."""
++    task = observation.get("task")
++    raw_observation = {key: value for key, value in observation.items() if key != "task"}
++    complementary_data = {"task": task} if task is not None else None
++    return create_transition(observation=raw_observation, complementary_data=complementary_data)
++
++
+ def make_env_config(env_type: str, **kwargs) -> EnvConfig:
+     if env_type == "aloha":
+         return AlohaEnv(**kwargs)
+@@ -122,6 +131,8 @@ def make_env_pre_post_processors(
+                 gripper_qpos_key=getattr(env_cfg, "gripper_qpos_key", "gripper_qpos"),
+                 tactile_force_grid_key=getattr(env_cfg, "tactile_force_grid_key", "tactile_force_grid"),
+                 tactile_resultant_force_key=getattr(env_cfg, "tactile_resultant_force_key", None),
++                gripper_torque_key=getattr(env_cfg, "gripper_torque_key", "gripper_torque"),
++                control_mode=getattr(env_cfg, "control_mode", "ik_rel"),
+                 camera_keys=getattr(env_cfg, "camera_keys", ""),
+             )
+         )
+@@ -130,10 +141,15 @@ def make_env_pre_post_processors(
+             IsaacLabTactilePolicyActionProcessorStep(
+                 base_quat_key="base_quat_w",
+                 assume_fixed_base=True,  # Default to fixed base for tabletop manipulators
++                control_mode=getattr(env_cfg, "control_mode", "ik_rel"),
+             )
+         )
+ 
+-    preprocessor = PolicyProcessorPipeline(steps=preprocessor_steps)
++    preprocessor = PolicyProcessorPipeline(
++        steps=preprocessor_steps,
++        to_transition=_isaaclab_observation_to_transition,
++        to_output=transition_to_batch,
++    )
+     postprocessor = PolicyProcessorPipeline(steps=postprocessor_steps)
+ 
+     return preprocessor, postprocessor
+@@ -246,7 +262,11 @@ def make_env(
+                 observation_height=getattr(cfg, "observation_height", 224),
+                 observation_width=getattr(cfg, "observation_width", 224),
+                 tactile_shape=getattr(cfg, "tactile_force_grid_shape", (2, 10, 12, 3)),
++                include_gripper_torque_window=getattr(cfg, "include_gripper_torque_window", False),
++                torque_window_size=getattr(cfg, "torque_window_size", 30),
++                control_mode=getattr(cfg, "control_mode", "ik_rel"),
+                 max_episode_steps=getattr(cfg, "episode_length", 300),
++                render_mode=getattr(cfg, "render_mode", "rgb_array"),
+             )
+ 
+         vec_env = env_cls([make_remote_env for _ in range(n_envs)])
+diff --git a/src/lerobot/envs/isaaclab_tactile_remote.py b/src/lerobot/envs/isaaclab_tactile_remote.py
+index 5428b99..b42e887 100644
+--- a/src/lerobot/envs/isaaclab_tactile_remote.py
++++ b/src/lerobot/envs/isaaclab_tactile_remote.py
+@@ -59,7 +59,8 @@ class IsaacLabTactileRemoteEnv(gym.Env):
+         >>> obs, reward, terminated, truncated, info = env.step(action)
+     """
+     
+-    metadata = {"render_modes": ["rgb_array"]}
++    # The basket task runs at 100 Hz physics with decimation 5.
++    metadata = {"render_modes": ["rgb_array"], "render_fps": 20}
+     
+     def __init__(
+         self,
+@@ -69,6 +70,9 @@ class IsaacLabTactileRemoteEnv(gym.Env):
+         observation_height: int = 224,
+         observation_width: int = 224,
+         tactile_shape: tuple[int, ...] = (2, 10, 12, 3),
++        include_gripper_torque_window: bool = False,
++        torque_window_size: int = 30,
++        control_mode: str = "ik_rel",
+         max_episode_steps: int = 300,
+         render_mode: str | None = None,
+     ):
+@@ -93,22 +97,27 @@ class IsaacLabTactileRemoteEnv(gym.Env):
+         self.observation_height = observation_height
+         self.observation_width = observation_width
+         self.tactile_shape = tactile_shape
++        self.include_gripper_torque_window = include_gripper_torque_window
++        self.torque_window_size = torque_window_size
++        self.control_mode = control_mode
+         self.max_episode_steps = max_episode_steps
++        self._max_episode_steps = max_episode_steps
+         self.render_mode = render_mode
+         
+         self._step_count = 0
+         self._context = None
+         self._socket = None
+         self._connected = False
++        self._last_render_frame: np.ndarray | None = None
+         
+-        # Define action space (7D: delta_pos, delta_rot, gripper)
++        action_dim = 8 if self.control_mode == "joint" else 7
+         self.action_space = spaces.Box(
+-            low=-1.0, high=1.0, shape=(7,), dtype=np.float32
++            low=-np.inf, high=np.inf, shape=(action_dim,), dtype=np.float32
+         )
+         
+         # Define observation space as dict
+         # Note: This is the raw observation space before processing
+-        self.observation_space = spaces.Dict({
++        observation_spaces = {
+             "eef_pos": spaces.Box(low=-10, high=10, shape=(3,), dtype=np.float32),
+             "eef_quat": spaces.Box(low=-1, high=1, shape=(4,), dtype=np.float32),
+             "base_pos": spaces.Box(low=-10, high=10, shape=(3,), dtype=np.float32),
+@@ -127,7 +136,16 @@ class IsaacLabTactileRemoteEnv(gym.Env):
+                 shape=(observation_height, observation_width, 3),
+                 dtype=np.uint8
+             ),
+-        })
++        }
++        if self.control_mode == "joint":
++            observation_spaces["arm_joint_pos"] = spaces.Box(
++                low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32
++            )
++        if self.include_gripper_torque_window:
++            observation_spaces["gripper_torque"] = spaces.Box(
++                low=-np.inf, high=np.inf, shape=(self.torque_window_size, 1), dtype=np.float32
++            )
++        self.observation_space = spaces.Dict(observation_spaces)
+     
+     def _connect(self) -> None:
+         """Establish ZeroMQ connection to server."""
+@@ -152,6 +170,9 @@ class IsaacLabTactileRemoteEnv(gym.Env):
+         logger.info(f"Connecting to IsaacLab server at {endpoint}")
+         self._socket.connect(endpoint)
+         self._connected = True
++
++    def task_description(self) -> str:
++        return "Pick and place the cube into the basket"
+     
+     def _disconnect(self) -> None:
+         """Close ZeroMQ connection."""
+@@ -301,7 +322,7 @@ class IsaacLabTactileRemoteEnv(gym.Env):
+         obs = {}
+         
+         # Core state observations
+-        for key in ["eef_pos", "eef_quat", "base_pos", "base_quat", "gripper_qpos"]:
++        for key in ["eef_pos", "eef_quat", "base_pos", "base_quat", "gripper_qpos", "arm_joint_pos"]:
+             if key in raw_obs:
+                 obs[key] = np.asarray(raw_obs[key], dtype=np.float32)
+         
+@@ -310,6 +331,8 @@ class IsaacLabTactileRemoteEnv(gym.Env):
+             obs["tactile_force_grid"] = np.asarray(
+                 raw_obs["tactile_force_grid"], dtype=np.float32
+             )
++        if "gripper_torque" in raw_obs:
++            obs["gripper_torque"] = np.asarray(raw_obs["gripper_torque"], dtype=np.float32)
+         
+         # Images
+         for img_key in ["rgb_table", "rgb_wrist"]:
+@@ -318,6 +341,8 @@ class IsaacLabTactileRemoteEnv(gym.Env):
+                 if isinstance(img, list):
+                     img = np.array(img, dtype=np.uint8)
+                 obs[img_key] = img
++                if img_key == "rgb_table":
++                    self._last_render_frame = np.asarray(img, dtype=np.uint8).copy()
+         
+         # Pass through any additional keys
+         for key, value in raw_obs.items():
+@@ -330,20 +355,10 @@ class IsaacLabTactileRemoteEnv(gym.Env):
+         return obs
+     
+     def render(self) -> np.ndarray | None:
+-        """Render the environment (request frame from server)."""
++        """Return the latest table-camera frame received with an observation."""
+         if self.render_mode != "rgb_array":
+             return None
+-        
+-        request = {"cmd": "render"}
+-        response = self._send_request(request)
+-        
+-        if "frame" in response:
+-            frame = response["frame"]
+-            if isinstance(frame, list):
+-                frame = np.array(frame, dtype=np.uint8)
+-            return frame
+-        
+-        return None
++        return self._last_render_frame
+     
+     def close(self) -> None:
+         """Close the environment and disconnect from server."""
+diff --git a/src/lerobot/envs/utils.py b/src/lerobot/envs/utils.py
+index 09431a1..ec829b0 100644
+--- a/src/lerobot/envs/utils.py
++++ b/src/lerobot/envs/utils.py
+@@ -107,6 +107,29 @@ def preprocess_observation(observations: dict[str, np.ndarray]) -> dict[str, Ten
+     if "camera_obs" in observations:
+         return_observations[f"{OBS_STR}.camera_obs"] = observations["camera_obs"]
+ 
++    # Preserve raw IsaacLab tactile-server observations until the dedicated
++    # environment processor converts them to policy state/image keys.
++    isaaclab_raw_keys = (
++        "eef_pos",
++        "eef_quat",
++        "base_pos",
++        "base_quat",
++        "gripper_qpos",
++        "arm_joint_pos",
++        "tactile_force_grid",
++        "tactile_resultant_force",
++        "gripper_torque",
++        "rgb_table",
++        "rgb_wrist",
++    )
++    for key in isaaclab_raw_keys:
++        if key not in observations:
++            continue
++        value = observations[key]
++        if isinstance(value, np.ndarray):
++            value = torch.from_numpy(np.array(value, copy=True))
++        return_observations[key] = value
++
+     return return_observations
+ 
+ 
+@@ -139,7 +162,8 @@ def check_env_attributes_and_types(env: gym.vector.VectorEnv) -> None:
+     with warnings.catch_warnings():
+         warnings.simplefilter("once", UserWarning)  # Apply filter only in this function
+ 
+-        if not (hasattr(env.envs[0], "task_description") and hasattr(env.envs[0], "task")):
++        base_env = env.envs[0].unwrapped
++        if not (hasattr(base_env, "task_description") or hasattr(base_env, "task")):
+             warnings.warn(
+                 "The environment does not have 'task_description' and 'task'. Some policies require these features.",
+                 UserWarning,
+@@ -155,26 +179,15 @@ def check_env_attributes_and_types(env: gym.vector.VectorEnv) -> None:
+ 
+ def add_envs_task(env: gym.vector.VectorEnv, observation: RobotObservation) -> RobotObservation:
+     """Adds task feature to the observation dict with respect to the first environment attribute."""
+-    if hasattr(env.envs[0], "task_description"):
+-        task_result = env.call("task_description")
+-
+-        if isinstance(task_result, tuple):
+-            task_result = list(task_result)
+-
+-        if not isinstance(task_result, list):
+-            raise TypeError(f"Expected task_description to return a list, got {type(task_result)}")
++    base_envs = [wrapped_env.unwrapped for wrapped_env in env.envs]
++    if hasattr(base_envs[0], "task_description"):
++        task_result = [base_env.task_description() for base_env in base_envs]
+         if not all(isinstance(item, str) for item in task_result):
+             raise TypeError("All items in task_description result must be strings")
+ 
+         observation["task"] = task_result
+-    elif hasattr(env.envs[0], "task"):
+-        task_result = env.call("task")
+-
+-        if isinstance(task_result, tuple):
+-            task_result = list(task_result)
+-
+-        if not isinstance(task_result, list):
+-            raise TypeError(f"Expected task to return a list, got {type(task_result)}")
++    elif hasattr(base_envs[0], "task"):
++        task_result = [base_env.task() if callable(base_env.task) else base_env.task for base_env in base_envs]
+         if not all(isinstance(item, str) for item in task_result):
+             raise TypeError("All items in task result must be strings")
+ 
+diff --git a/src/lerobot/policies/factory.py b/src/lerobot/policies/factory.py
+index a593e5b..b9e873d 100644
+--- a/src/lerobot/policies/factory.py
++++ b/src/lerobot/policies/factory.py
+@@ -467,9 +467,18 @@ def make_policy(
+             raise ValueError("env_cfg cannot be None when ds_meta is not provided")
+         features = env_to_policy_features(env_cfg)
+ 
+-    cfg.output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
+-    if not cfg.input_features:
+-        cfg.input_features = {key: ft for key, ft in features.items() if key not in cfg.output_features}
++    dataset_output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
++    dataset_input_features = {key: ft for key, ft in features.items() if key not in dataset_output_features}
++
++    # The pretrained config describes its original dataset. Refresh the schema
++    # from the active dataset so newly added observations such as the causal
++    # gripper-torque window are present before policy validation.
++    if rename_map:
++        dataset_input_features = {rename_map.get(key, key): ft for key, ft in dataset_input_features.items()}
++    if not getattr(cfg, "use_torque_lstm", False):
++        dataset_input_features.pop("observation.gripper_torque", None)
++    cfg.output_features = dataset_output_features
++    cfg.input_features = dataset_input_features
+     kwargs["config"] = cfg
+ 
+     # Pass dataset_stats to the policy if available (needed for some policies like SARM)
+diff --git a/src/lerobot/policies/smolvla/configuration_smolvla.py b/src/lerobot/policies/smolvla/configuration_smolvla.py
+index 937168c..ccbe7a6 100644
+--- a/src/lerobot/policies/smolvla/configuration_smolvla.py
++++ b/src/lerobot/policies/smolvla/configuration_smolvla.py
+@@ -13,7 +13,6 @@
+ # limitations under the License.
+ 
+ from dataclasses import dataclass, field
+-from typing import Literal
+ 
+ from lerobot.configs.policies import PreTrainedConfig
+ from lerobot.configs.types import FeatureType, NormalizationMode, PolicyFeature
+@@ -39,6 +38,7 @@ class SmolVLAConfig(PreTrainedConfig):
+             "STATE": NormalizationMode.MEAN_STD,
+             "ACTION": NormalizationMode.MEAN_STD,
+             "TACTILE": NormalizationMode.MEAN_STD,  # For tactile force grids
++            "ENV": NormalizationMode.MEAN_STD,
+         }
+     )
+ 
+@@ -125,7 +125,10 @@ class SmolVLAConfig(PreTrainedConfig):
+     # How to organize tactile tokens in prefix
+     # - "per_fingertip_per_branch": 2*N tokens (one force + one spatial per fingertip)
+     # - "per_branch_pooled": 2 tokens (pooled force + pooled spatial across fingertips)
+-    tactile_token_mode: Literal["per_fingertip_per_branch", "per_branch_pooled"] = "per_fingertip_per_branch"
++    # Keep this as ``str`` because the pinned draccus version cannot decode
++    # ``typing.Literal`` from saved checkpoint JSON. ``__post_init__`` below
++    # still validates the accepted values.
++    tactile_token_mode: str = "per_fingertip_per_branch"
+ 
+     # CAE latent dimension (paper uses 128)
+     tactile_latent_dim: int = 128
+@@ -136,6 +139,25 @@ class SmolVLAConfig(PreTrainedConfig):
+     # Whether to train the CAE encoder (if False, freeze CAE weights)
+     train_tactile_cae: bool = True
+ 
++    # Gripper torque history encoded as one Action Expert suffix token.
++    use_torque_lstm: bool = False
++    torque_window_key: str = "observation.gripper_torque"
++    torque_window_size: int = 30
++    torque_input_dim: int = 1
++    torque_lstm_hidden_dim: int = 64
++    torque_lstm_output_dim: int = 16
++    torque_lstm_num_layers: int = 2
++    # The external encoder is frozen by default; the suffix projection remains trainable.
++    train_torque_lstm: bool = False
++
++    # Compatibility fields retained by checkpoints from the source machine.
++    gripper_only_tactile: bool = False
++    tactile_torque_key: str = "observation.gripper_torque"
++    wrist_camera_key: str = f"{OBS_IMAGES}.wrist"
++    torque_lstm_weights_path: str | None = None
++    compile_model: bool = False
++    compile_mode: str = "max-autotune"
++
+     # ==================== Arm-Hand Feature Enhancement ====================
+     # Enable Arm-Hand Feature Enhancement module (paper Sec. 3.4.1)
+     use_arm_hand_feature_enhancement: bool = False
+@@ -197,6 +219,15 @@ class SmolVLAConfig(PreTrainedConfig):
+             )
+             self.input_features[key] = empty_camera
+ 
++        if self.use_torque_lstm:
++            feature = self.input_features.get(self.torque_window_key)
++            expected_shape = (self.torque_window_size, self.torque_input_dim)
++            if feature is None or feature.shape != expected_shape:
++                actual_shape = None if feature is None else feature.shape
++                raise ValueError(
++                    f"{self.torque_window_key} must have shape {expected_shape}, got {actual_shape}"
++                )
++
+     def get_optimizer_preset(self) -> AdamWConfig:
+         return AdamWConfig(
+             lr=self.optimizer_lr,
+diff --git a/src/lerobot/policies/smolvla/modeling_smolvla.py b/src/lerobot/policies/smolvla/modeling_smolvla.py
+index 568bdac..71611af 100644
+--- a/src/lerobot/policies/smolvla/modeling_smolvla.py
++++ b/src/lerobot/policies/smolvla/modeling_smolvla.py
+@@ -52,8 +52,10 @@ policy = SmolVLAPolicy.from_pretrained("lerobot/smolvla_base")
+ 
+ """
+ 
++import logging
+ import math
+ from collections import deque
++from pathlib import Path
+ from typing import TypedDict
+ 
+ import torch
+@@ -73,6 +75,19 @@ from lerobot.utils.constants import ACTION, OBS_LANGUAGE_ATTENTION_MASK, OBS_LAN
+ from lerobot.utils.utils import get_safe_dtype
+ 
+ 
++class ForceLSTMEncoder(nn.Module):
++    """Encode a causal gripper-torque window into one latent vector."""
++
++    def __init__(self, input_dim=1, hidden_dim=64, output_dim=16, num_layers=2):
++        super().__init__()
++        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
++        self.fc = nn.Linear(hidden_dim, output_dim)
++
++    def forward(self, torque_window: Tensor) -> Tensor:
++        _, (hidden, _) = self.lstm(torque_window)
++        return self.fc(hidden[-1])
++
++
+ class ActionSelectKwargs(TypedDict, total=False):
+     inference_delay: int | None
+     prev_chunk_left_over: Tensor | None
+@@ -291,6 +306,7 @@ class SmolVLAPolicy(PreTrainedPolicy):
+ 
+         # Prepare tactile data for inference
+         tactile_force_grid, tactile_resultant_force = self.prepare_tactile(batch)
++        torque_window = self.prepare_torque_window(batch)
+ 
+         actions = self.model.sample_actions(
+             images,
+@@ -301,6 +317,7 @@ class SmolVLAPolicy(PreTrainedPolicy):
+             noise=noise,
+             tactile_force_grid=tactile_force_grid,
+             tactile_resultant_force=tactile_resultant_force,
++            torque_window=torque_window,
+             **kwargs,
+         )
+ 
+@@ -391,6 +408,7 @@ class SmolVLAPolicy(PreTrainedPolicy):
+ 
+         # Prepare tactile data
+         tactile_force_grid, tactile_resultant_force = self.prepare_tactile(batch)
++        torque_window = self.prepare_torque_window(batch)
+ 
+         loss_dict = {}
+         model_output = self.model.forward(
+@@ -404,6 +422,7 @@ class SmolVLAPolicy(PreTrainedPolicy):
+             time,
+             tactile_force_grid=tactile_force_grid,
+             tactile_resultant_force=tactile_resultant_force,
++            torque_window=torque_window,
+         )
+ 
+         # Handle arm-hand feature enhancement output
+@@ -548,6 +567,22 @@ class SmolVLAPolicy(PreTrainedPolicy):
+ 
+         return tactile_force_grid, tactile_resultant_force
+ 
++    def prepare_torque_window(self, batch: dict[str, Tensor]) -> Tensor | None:
++        if not self.config.use_torque_lstm:
++            return None
++        key = self.config.torque_window_key
++        if key not in batch:
++            raise ValueError(f"Missing required torque feature: {key}")
++        torque_window = batch[key]
++        if torque_window.ndim == 4 and torque_window.shape[1] == 1:
++            torque_window = torque_window.squeeze(1)
++        if torque_window.ndim == 2:
++            torque_window = torque_window.unsqueeze(0)
++        expected = (self.config.torque_window_size, self.config.torque_input_dim)
++        if torque_window.ndim != 3 or tuple(torque_window.shape[-2:]) != expected:
++            raise ValueError(f"{key} must have shape [B,{expected[0]},{expected[1]}], got {tuple(torque_window.shape)}")
++        return torque_window
++
+     def _pi_aloha_encode_actions(self, actions):
+         # Flip the joints.
+         for motor_idx in [1, 2, 8, 9]:
+@@ -678,6 +713,22 @@ class VLAFlowMatching(nn.Module):
+             self.vlm_with_expert.expert_hidden_size, self.vlm_with_expert.expert_hidden_size
+         )
+ 
++        self.torque_lstm = None
++        self.torque_norm = None
++        self.torque_to_expert = None
++        if self.config.use_torque_lstm:
++            self.torque_lstm = ForceLSTMEncoder(
++                input_dim=self.config.torque_input_dim,
++                hidden_dim=self.config.torque_lstm_hidden_dim,
++                output_dim=self.config.torque_lstm_output_dim,
++                num_layers=self.config.torque_lstm_num_layers,
++            )
++            self._load_external_torque_lstm_weights()
++            self.torque_norm = nn.LayerNorm(self.config.torque_lstm_output_dim)
++            self.torque_to_expert = nn.Linear(
++                self.config.torque_lstm_output_dim, self.vlm_with_expert.expert_hidden_size
++            )
++
+         self.set_requires_grad()
+         self.fake_image_token = self.vlm_with_expert.processor.tokenizer.fake_image_token_id
+         self.global_image_token = self.vlm_with_expert.processor.tokenizer.global_image_token_id
+@@ -716,12 +767,74 @@ class VLAFlowMatching(nn.Module):
+             # When using arm-hand enhancement, we use the fused head from the module
+             # instead of the simple action_out_proj
+ 
++    def _load_external_torque_lstm_weights(self) -> None:
++        """Initialize the causal encoder from a standalone LSTM checkpoint."""
++        weights_path = self.config.torque_lstm_weights_path
++        if not weights_path:
++            return
++
++        path = Path(weights_path).expanduser()
++        if not path.is_file():
++            logging.warning(
++                "External torque LSTM weights not found at %s; expecting the enclosing "
++                "SmolVLA checkpoint to provide model.torque_lstm weights.",
++                path,
++            )
++            return
++
++        try:
++            checkpoint = torch.jit.load(str(path), map_location="cpu")
++        except RuntimeError:
++            checkpoint = torch.load(path, map_location="cpu", weights_only=False)
++        if isinstance(checkpoint, torch.jit.ScriptModule):
++            checkpoint = checkpoint.state_dict()
++        if isinstance(checkpoint, dict):
++            for wrapper_key in ("state_dict", "model_state_dict"):
++                if isinstance(checkpoint.get(wrapper_key), dict):
++                    checkpoint = checkpoint[wrapper_key]
++                    break
++        if not isinstance(checkpoint, dict):
++            raise TypeError(f"External torque LSTM checkpoint must contain a state dict, got {type(checkpoint)}")
++
++        aliases = {
++            "encoder_lstm.": "lstm.",
++            "encoder_fc.": "fc.",
++        }
++        state_dict = {}
++        for key, value in checkpoint.items():
++            short_key = key
++            for prefix in ("module.", "model.", "lstm_encoder.", "full_model."):
++                short_key = short_key.removeprefix(prefix)
++            for source, target in aliases.items():
++                if short_key.startswith(source):
++                    short_key = target + short_key.removeprefix(source)
++                    break
++            if short_key.startswith(("lstm.", "fc.")):
++                state_dict[short_key] = value
++
++        missing, unexpected = self.torque_lstm.load_state_dict(state_dict, strict=False)
++        if missing or unexpected:
++            raise ValueError(
++                f"External torque LSTM weights are incompatible: missing={missing}, unexpected={unexpected}"
++            )
++
+     def _rtc_enabled(self):
+         return self.config.rtc_config is not None and self.config.rtc_config.enabled
+ 
+     def set_requires_grad(self):
+         for params in self.state_proj.parameters():
+             params.requires_grad = self.config.train_state_proj
++        if self.torque_lstm is not None:
++            for params in self.torque_lstm.parameters():
++                params.requires_grad = self.config.train_torque_lstm
++
++    def encode_torque_window(self, torque_window: Tensor | None) -> Tensor | None:
++        if self.torque_lstm is None:
++            return None
++        if torque_window is None:
++            raise ValueError("Torque LSTM is enabled but no torque window was provided")
++        latent = self.torque_lstm(torque_window)
++        return self.torque_to_expert(self.torque_norm(latent)).unsqueeze(1)
+ 
+     def sample_noise(self, shape, device):
+         noise = torch.normal(
+@@ -878,7 +991,7 @@ class VLAFlowMatching(nn.Module):
+ 
+         return embs, pad_masks, att_masks
+ 
+-    def embed_suffix(self, noisy_actions, timestep):
++    def embed_suffix(self, noisy_actions, timestep, torque_token=None):
+         """Embed state, noisy_actions, timestep to prepare for Expert Gemma processing."""
+         embs = []
+         pad_masks = []
+@@ -906,7 +1019,13 @@ class VLAFlowMatching(nn.Module):
+         action_time_emb = F.silu(action_time_emb)  # swish == silu
+         action_time_emb = self.action_time_mlp_out(action_time_emb)
+ 
+-        # Add to input tokens
++        if torque_token is not None:
++            torque_token = torque_token.to(device=device, dtype=dtype)
++            embs.append(torque_token)
++            pad_masks.append(torch.ones(bsize, 1, dtype=torch.bool, device=device))
++            att_masks.append(1)
++
++        # Add action-time tokens to the suffix.
+         embs.append(action_time_emb)
+ 
+         bsize, action_time_dim = action_time_emb.shape[:2]
+@@ -933,6 +1052,7 @@ class VLAFlowMatching(nn.Module):
+         time=None,
+         tactile_force_grid: torch.Tensor | None = None,
+         tactile_resultant_force: torch.Tensor | None = None,
++        torque_window: torch.Tensor | None = None,
+     ) -> Tensor | tuple[Tensor, dict[str, Tensor]]:
+         """Do a full training forward pass and compute the loss (batch_size x num_steps x num_motors)
+ 
+@@ -971,7 +1091,8 @@ class VLAFlowMatching(nn.Module):
+             tactile_force_grid=tactile_force_grid,
+             tactile_resultant_force=tactile_resultant_force,
+         )
+-        suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(x_t, time)
++        torque_token = self.encode_torque_window(torque_window)
++        suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(x_t, time, torque_token)
+ 
+         pad_masks = torch.cat([prefix_pad_masks, suffix_pad_masks], dim=1)
+         att_masks = torch.cat([prefix_att_masks, suffix_att_masks], dim=1)
+@@ -1027,6 +1148,7 @@ class VLAFlowMatching(nn.Module):
+         noise=None,
+         tactile_force_grid: torch.Tensor | None = None,
+         tactile_resultant_force: torch.Tensor | None = None,
++        torque_window: torch.Tensor | None = None,
+         **kwargs: Unpack[ActionSelectKwargs],
+     ) -> Tensor:
+         """Do a full inference forward and compute the action (batch_size x num_steps x num_motors)
+@@ -1057,6 +1179,7 @@ class VLAFlowMatching(nn.Module):
+             tactile_force_grid=tactile_force_grid,
+             tactile_resultant_force=tactile_resultant_force,
+         )
++        torque_token = self.encode_torque_window(torque_window)
+         prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
+         prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
+         # Compute image and language key value cache
+@@ -1082,6 +1205,7 @@ class VLAFlowMatching(nn.Module):
+                     prefix_pad_masks=prefix_pad_masks,
+                     past_key_values=past_key_values,
+                     timestep=current_timestep,
++                    torque_token=torque_token,
+                 )
+ 
+             if self._rtc_enabled():
+@@ -1113,9 +1237,10 @@ class VLAFlowMatching(nn.Module):
+         past_key_values,
+         x_t,
+         timestep,
++        torque_token=None,
+     ):
+         """Apply one denoising step of the noise `x_t` at a given timestep."""
+-        suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(x_t, timestep)
++        suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(x_t, timestep, torque_token)
+ 
+         suffix_len = suffix_pad_masks.shape[1]
+         batch_size = prefix_pad_masks.shape[0]
+diff --git a/src/lerobot/processor/env_processor.py b/src/lerobot/processor/env_processor.py
+index e04e1a6..9671100 100644
+--- a/src/lerobot/processor/env_processor.py
++++ b/src/lerobot/processor/env_processor.py
+@@ -274,6 +274,7 @@ class IsaacLabTactilePolicyObservationProcessorStep(ObservationProcessorStep):
+     # Tactile keys
+     tactile_force_grid_key: str = "tactile_force_grid"
+     tactile_resultant_force_key: str | None = None
++    gripper_torque_key: str = "gripper_torque"
+ 
+     # Camera keys (comma-separated)
+     camera_keys: str = ""
+@@ -281,6 +282,8 @@ class IsaacLabTactilePolicyObservationProcessorStep(ObservationProcessorStep):
+     # Output tactile key names
+     output_tactile_force_grid_key: str = "observation.tactile.force_grid"
+     output_tactile_resultant_force_key: str = "observation.tactile.resultant_force"
++    output_gripper_torque_key: str = "observation.gripper_torque"
++    control_mode: str = "ik_rel"
+ 
+     def _process_observation(self, observation: dict) -> dict:
+         """
+@@ -299,8 +302,18 @@ class IsaacLabTactilePolicyObservationProcessorStep(ObservationProcessorStep):
+         base_pos = raw_obs.get("base_pos")
+         base_quat = raw_obs.get("base_quat")
+         gripper_qpos = raw_obs.get("gripper_qpos")
+-
+-        if eef_pos is not None and eef_quat is not None and gripper_qpos is not None:
++        arm_joint_pos = raw_obs.get("arm_joint_pos")
++
++        if self.control_mode == "joint":
++            if arm_joint_pos is None or gripper_qpos is None:
++                raise ValueError("Joint control requires arm_joint_pos and gripper_qpos")
++            arm_joint_pos = torch.from_numpy(np.array(arm_joint_pos, dtype=np.float32, copy=True))
++            gripper_qpos = torch.from_numpy(np.array(gripper_qpos, dtype=np.float32, copy=True))
++            state = torch.cat([arm_joint_pos, gripper_qpos], dim=-1)
++            if state.dim() == 1:
++                state = state.unsqueeze(0)
++            processed_obs[OBS_STATE] = state
++        elif eef_pos is not None and eef_quat is not None and gripper_qpos is not None:
+             # Default base pose to identity if not provided (fixed base assumption)
+             if base_pos is None:
+                 base_pos = torch.zeros(3) if isinstance(eef_pos, torch.Tensor) else np.zeros(3)
+@@ -340,6 +353,15 @@ class IsaacLabTactilePolicyObservationProcessorStep(ObservationProcessorStep):
+         # Process tactile data
+         self._process_tactile(raw_obs, processed_obs)
+ 
++        gripper_torque = raw_obs.get("gripper_torque")
++        if gripper_torque is not None:
++            if isinstance(gripper_torque, np.ndarray):
++                gripper_torque = torch.from_numpy(np.array(gripper_torque, copy=True))
++            gripper_torque = gripper_torque.float()
++            if gripper_torque.dim() == 2:
++                gripper_torque = gripper_torque.unsqueeze(0)
++            processed_obs[self.output_gripper_torque_key] = gripper_torque
++
+         return processed_obs
+ 
+     def _extract_raw_obs(self, observation: dict) -> dict:
+@@ -372,6 +394,7 @@ class IsaacLabTactilePolicyObservationProcessorStep(ObservationProcessorStep):
+         raw_obs["gripper_qpos"] = find_value(
+             [self.gripper_qpos_key, "gripper_pos", "gripper_qpos", "gripper_joint_pos"]
+         )
++        raw_obs["arm_joint_pos"] = find_value(["arm_joint_pos"])
+ 
+         # Tactile data
+         raw_obs["tactile_force_grid"] = find_value([self.tactile_force_grid_key, "force_grid"])
+@@ -379,6 +402,7 @@ class IsaacLabTactilePolicyObservationProcessorStep(ObservationProcessorStep):
+             raw_obs["tactile_resultant_force"] = find_value(
+                 [self.tactile_resultant_force_key, "resultant_force"]
+             )
++        raw_obs["gripper_torque"] = find_value([self.gripper_torque_key, "gripper_torque"])
+ 
+         return raw_obs
+ 
+@@ -392,6 +416,22 @@ class IsaacLabTactilePolicyObservationProcessorStep(ObservationProcessorStep):
+         # Process camera_keys if specified
+         if self.camera_keys:
+             camera_keys_list = [k.strip() for k in self.camera_keys.split(",") if k.strip()]
++            for index, raw_key in enumerate(camera_keys_list, start=1):
++                if raw_key not in observation:
++                    continue
++                raw_img = observation[raw_key]
++                if isinstance(raw_img, np.ndarray):
++                    img = torch.from_numpy(np.array(raw_img, copy=True))
++                else:
++                    img = torch.as_tensor(raw_img)
++                if img.dim() == 3:
++                    img = img.unsqueeze(0)
++                if img.dim() == 4 and img.shape[-1] in (1, 3, 4):
++                    img = img[..., :3].permute(0, 3, 1, 2).contiguous()
++                if img.dtype == torch.uint8:
++                    img = img.float() / 255.0
++                processed_obs[f"{OBS_IMAGES}.camera{index}"] = img
++
+             camera_obs_key = f"{OBS_STR}.camera_obs"
+             if camera_obs_key in observation:
+                 camera_obs = observation[camera_obs_key]
+@@ -410,14 +450,14 @@ class IsaacLabTactilePolicyObservationProcessorStep(ObservationProcessorStep):
+         force_grid = raw_obs.get("tactile_force_grid")
+         if force_grid is not None:
+             if isinstance(force_grid, np.ndarray):
+-                force_grid = torch.from_numpy(force_grid)
++                force_grid = torch.from_numpy(np.array(force_grid, copy=True))
+             force_grid = force_grid.float()
+             processed_obs[self.output_tactile_force_grid_key] = force_grid
+ 
+         resultant_force = raw_obs.get("tactile_resultant_force")
+         if resultant_force is not None:
+             if isinstance(resultant_force, np.ndarray):
+-                resultant_force = torch.from_numpy(resultant_force)
++                resultant_force = torch.from_numpy(np.array(resultant_force, copy=True))
+             resultant_force = resultant_force.float()
+             processed_obs[self.output_tactile_resultant_force_key] = resultant_force
+ 
+@@ -441,11 +481,11 @@ class IsaacLabTactilePolicyObservationProcessorStep(ObservationProcessorStep):
+             if ft != PipelineFeatureType.STATE:
+                 new_features[ft] = feats.copy()
+ 
+-        # Rebuild STATE features with 11D state
++        state_dim = 9 if self.control_mode == "joint" else 11
+         state_feats = {}
+         state_feats[OBS_STATE] = PolicyFeature(
+             key=OBS_STATE,
+-            shape=(11,),  # [eef_pos_b(3), eef_rot6d_b(6), gripper_qpos(2)]
++            shape=(state_dim,),
+             dtype="float32",
+             description=(
+                 "IsaacLab tactile policy state: EE position in base frame (3), "
+@@ -488,6 +528,7 @@ class IsaacLabTactilePolicyActionProcessorStep(ActionProcessorStep):
+ 
+     # If True, assume identity base pose (no rotation needed)
+     assume_fixed_base: bool = True
++    control_mode: str = "ik_rel"
+ 
+     def action(self, action: torch.Tensor | np.ndarray) -> torch.Tensor | np.ndarray:
+         """
+@@ -516,6 +557,8 @@ class IsaacLabTactilePolicyActionProcessorStep(ActionProcessorStep):
+ 
+         if action is None:
+             return new_transition
++        if self.control_mode == "joint":
++            return new_transition
+ 
+         # Get base quaternion
+         base_quat_w = None
+@@ -563,6 +606,7 @@ class IsaacLabTactilePolicyActionProcessorStep(ActionProcessorStep):
+         return {
+             "base_quat_key": self.base_quat_key,
+             "assume_fixed_base": self.assume_fixed_base,
++            "control_mode": self.control_mode,
+         }
+ 
+     def transform_features(

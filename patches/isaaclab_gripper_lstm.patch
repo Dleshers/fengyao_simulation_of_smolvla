@@ -1,0 +1,194 @@
+diff --git a/lerobot/convert_pick_place_basket_tacex.py b/lerobot/convert_pick_place_basket_tacex.py
+index 1fc91584..1c45a6f1 100644
+--- a/lerobot/convert_pick_place_basket_tacex.py
++++ b/lerobot/convert_pick_place_basket_tacex.py
+@@ -104,6 +104,9 @@ def parse_args():
+         action="store_true",
+         help="Store raw world-frame fields for debugging",
+     )
++    parser.add_argument(
++        "--torque-window-size", type=int, default=30, help="Causal gripper torque window length."
++    )
+     return parser.parse_args()
+ 
+ 
+@@ -148,6 +151,11 @@ def main():
+             "shape": (args.num_fingertips, args.force_grid_height, args.force_grid_width, 3),
+             "names": None,
+         },
++        "observation.gripper_torque": {
++            "dtype": "float32",
++            "shape": (args.torque_window_size, 1),
++            "names": None,
++        },
+     }
+ 
+     # Optionally add debug fields
+@@ -177,7 +185,11 @@ def main():
+ 
+         for idx, demo_name in enumerate(demos, 1):
+             demo = f["data"][demo_name]
+-            T = demo["actions"].shape[0]
++            action_key = "teacher_actions_ik" if "teacher_actions_ik" in demo else "actions"
++            T = demo[action_key].shape[0]
++            if "gripper_torque" not in demo:
++                raise KeyError(f"{demo_name} is missing required gripper_torque")
++            torque_values = demo["gripper_torque"][:].astype(np.float32).reshape(T, 1)
+ 
+             print(f"  [{idx}/{total_demos}] {demo_name}: {T} steps", end="\r")
+ 
+@@ -211,7 +223,9 @@ def main():
+                 )
+ 
+                 # Get raw action from HDF5 (7D: [delta_pos(3), delta_rot(3), gripper(1)])
+-                raw_action = demo["actions"][t].astype(np.float32)
++                raw_action = demo[action_key][t].astype(np.float32)
++                if raw_action.shape != (7,):
++                    raise ValueError(f"Expected 7D IK-relative action, got {raw_action.shape} in {demo_name}")
+ 
+                 # Transform action from world frame to base frame (7D)
+                 delta_pos_w = raw_action[:3]
+@@ -240,6 +254,13 @@ def main():
+                     "observation.images.camera1": demo["rgb_table"][t],
+                     "observation.images.camera2": demo["rgb_wrist"][t],
+                     "observation.tactile.force_grid": grid,
++                    "observation.gripper_torque": np.concatenate(
++                        [
++                            np.repeat(torque_values[:1], max(0, args.torque_window_size - t - 1), axis=0),
++                            torque_values[max(0, t - args.torque_window_size + 1) : t + 1],
++                        ],
++                        axis=0,
++                    ).astype(np.float32),
+                 }
+ 
+                 # Optionally store debug fields
+diff --git a/scripts/environments/state_machine/pick_place_basket_tacex_sm.py b/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+index b4d019f3..b4d7a9f4 100644
+--- a/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
++++ b/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+@@ -1009,6 +1009,7 @@ class DataRecorder:
+             f.attrs["state_schema"] = "joint_state_9d:[arm_joint_pos(7),gripper_qpos(2)]"
+             f.attrs["action_schema"] = "joint_action_8d:[arm_joint_pos_target_abs(7),gripper_cmd(1)]"
+             f.attrs["teacher_control_mode"] = "ik_rel"
++            f.attrs["torque_schema"] = "gripper_torque:[1], mean of the two gripper joint applied torques"
+     
+     def _empty_buffer(self):
+         return {
+@@ -1021,6 +1022,7 @@ class DataRecorder:
+             "base_pos": [],
+             "base_quat": [],
+             "gripper_pos": [],
++            "gripper_torque": [],
+             "cube_pos": [],
+             "cube_quat": [],
+             "basket_pos": [],
+@@ -1407,6 +1409,9 @@ def main():
+                             "base_pos": base_pos[i].cpu().numpy(),  # Robot base position
+                             "base_quat": base_quat[i].cpu().numpy(),  # Robot base quaternion (x,y,z,w)
+                             "gripper_pos": robot.data.joint_pos[i, -2:].cpu().numpy(),
++                            "gripper_torque": np.array(
++                                [float(robot.data.applied_torque[i, -2:].mean().item())], dtype=np.float32
++                            ),
+                             "cube_pos": cube_pose[i, :3].cpu().numpy(),
+                             "cube_quat": cube_pose[i, 3:7].cpu().numpy(),
+                             "basket_pos": basket_pose[i, :3].cpu().numpy(),
+@@ -1578,4 +1583,3 @@ def main():
+ if __name__ == "__main__":
+     main()
+     simulation_app.close()
+-
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+index d526e557..2e4abc14 100644
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@ -50,6 +50,14 @@ def parse_args():
+     )
+     parser.add_argument("--img_height", type=int, default=224, help="Camera image height")
+     parser.add_argument("--img_width", type=int, default=224, help="Camera image width")
++    parser.add_argument(
++        "--send-gripper-torque-window",
++        action="store_true",
++        help="Include a causal gripper torque window in each observation.",
++    )
++    parser.add_argument(
++        "--torque-window-size", type=int, default=30, help="Length of the gripper torque history."
++    )
+     parser.add_argument(
+         "--background_texture",
+         type=str,
+@@ -108,12 +116,17 @@ class IsaacLabEnvWrapper:
+         img_height: int = 224,
+         img_width: int = 224,
+         background_texture: str = "small_empty_house_4k.hdr",
++        send_gripper_torque_window: bool = False,
++        torque_window_size: int = 30,
+     ):
+         self.env_name = env_name
+         self.device = device
+         self.img_height = img_height
+         self.img_width = img_width
+         self.background_texture = background_texture
++        self.send_gripper_torque_window = send_gripper_torque_window
++        self.torque_window_size = torque_window_size
++        self._gripper_torque_history: list[np.ndarray] = []
+         self.env = None
+         self._step_count = 0
+         self._max_episode_steps = 300
+@@ -250,6 +263,10 @@ class IsaacLabEnvWrapper:
+                 force_grid[1] = self._compute_force_grid(hmap[0])
+         
+         obs["tactile_force_grid"] = force_grid
++
++        if self.send_gripper_torque_window:
++            self._append_current_gripper_torque()
++            obs["gripper_torque"] = self._get_padded_gripper_torque_window()
+         
+         # Add placeholder images if cameras not available
+         if "rgb_table" not in obs:
+@@ -321,10 +338,37 @@ class IsaacLabEnvWrapper:
+         ], axis=-1)
+         
+         return force_grid.astype(np.float32)
++
++    def _read_joint_torque(self) -> np.ndarray:
++        robot = self.env.scene["robot"]
++        torque = getattr(robot.data, "applied_torque", None)
++        if torque is None:
++            torque = getattr(robot.data, "joint_effort", None)
++        if torque is None:
++            raise AttributeError("robot.data has neither applied_torque nor joint_effort")
++        return torque[0].detach().cpu().numpy().astype(np.float32)
++
++    def _append_current_gripper_torque(self) -> None:
++        torque = self._read_joint_torque()
++        if torque.shape[0] < 2:
++            raise ValueError(f"Expected at least two gripper joints, got torque shape {torque.shape}")
++        value = np.array([float(torque[-2:].mean())], dtype=np.float32)
++        self._gripper_torque_history.append(value)
++        self._gripper_torque_history = self._gripper_torque_history[-self.torque_window_size :]
++
++    def _get_padded_gripper_torque_window(self) -> np.ndarray:
++        if not self._gripper_torque_history:
++            raise RuntimeError("Torque history is empty")
++        history = np.stack(self._gripper_torque_history, axis=0).astype(np.float32)
++        pad_count = self.torque_window_size - history.shape[0]
++        if pad_count > 0:
++            history = np.concatenate([np.repeat(history[:1], pad_count, axis=0), history], axis=0)
++        return history
+     
+     def reset(self, seed: int | None = None) -> dict:
+         """Reset environment and return observation."""
+         self._step_count = 0
++        self._gripper_torque_history = []
+         
+         # Reset the environment
+         if seed is not None:
+@@ -621,6 +665,8 @@ def main():
+         img_height=args_cli.img_height,
+         img_width=args_cli.img_width,
+         background_texture=args_cli.background_texture,
++        send_gripper_torque_window=args_cli.send_gripper_torque_window,
++        torque_window_size=args_cli.torque_window_size,
+     )
+     
+     # Start server
