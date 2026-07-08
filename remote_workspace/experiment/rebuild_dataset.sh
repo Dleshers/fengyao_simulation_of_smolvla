@@ -13,6 +13,7 @@ DATASET_REPO_ID="${DATASET_REPO_ID:-franka_pickplace_joint_visual_torque_w30_v1}
 NUM_DEMOS="${NUM_DEMOS:-200}"
 NUM_ENVS="${NUM_ENVS:-4}"
 SEED="${SEED:-1000}"
+FIXED_CUBE_POSE="${FIXED_CUBE_POSE:-}"
 PHASE="${1:-all}"
 
 collect() {
@@ -23,12 +24,17 @@ collect() {
   fi
   mkdir -p "$RAW_DIR" "$ROOT/tmp"
   cd "$ROOT/IsaacLab-Tactile"
+  extra_args=()
+  if [[ -n "$FIXED_CUBE_POSE" ]]; then
+    extra_args+=(--fixed_cube_pose "$FIXED_CUBE_POSE")
+  fi
   set +e
   OMNI_KIT_ACCEPT_EULA=YES TERM=xterm TMPDIR="$ROOT/tmp" \
     "$ISAAC_ENV/bin/python" scripts/environments/state_machine/pick_place_basket_tacex_sm.py \
       --num_envs "$NUM_ENVS" --num_demos "$NUM_DEMOS" --seed "$SEED" \
       --save_demos --output_dir "$RAW_DIR" \
       --background_mode fixed --background_texture small_empty_house_4k.hdr \
+      "${extra_args[@]}" \
       --enable_cameras --headless \
       --experience=isaacsim_4_5/isaaclab.python.headless.rendering.kit \
       --kit_args=--/app/useFabricSceneDelegate=0

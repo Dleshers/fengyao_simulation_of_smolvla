@@ -1,0 +1,115 @@
+diff --git a/IsaacLab-Tactile/scripts/environments/state_machine/pick_place_basket_tacex_sm.py b/IsaacLab-Tactile/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+--- a/IsaacLab-Tactile/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
++++ b/IsaacLab-Tactile/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+@@
+ parser.add_argument(
+     "--background_texture",
+     type=str,
+     default="small_empty_house_4k.hdr",
+     help="HDR texture path used when background_mode=fixed.",
+ )
++parser.add_argument(
++    "--fixed_cube_pose",
++    type=str,
++    default=None,
++    help=(
++        "Optional diagnostic cube pose in env frame as x,y,z[,qw,qx,qy,qz]. "
++        "Applied after environment resets for targeted data-collection smoke tests."
++    ),
++)
+ AppLauncher.add_app_launcher_args(parser)
+@@
+ import isaaclab_tasks  # noqa: F401
+ from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
+ from isaaclab.utils.assets import NVIDIA_NUCLEUS_DIR
+ 
+ 
++def _parse_fixed_cube_pose(spec: Optional[str], device: str) -> Optional[torch.Tensor]:
++    if spec is None or str(spec).strip() == "":
++        return None
++    values = [float(part.strip()) for part in str(spec).split(",") if part.strip()]
++    if len(values) == 3:
++        values = values + [1.0, 0.0, 0.0, 0.0]
++    if len(values) != 7:
++        raise ValueError(
++            "--fixed_cube_pose must be x,y,z or x,y,z,qw,qx,qy,qz; "
++            f"got {len(values)} values from {spec!r}"
++        )
++    return torch.tensor(values, dtype=torch.float32, device=device).unsqueeze(0)
++
++
++def _apply_fixed_cube_pose(env, fixed_cube_pose: Optional[torch.Tensor], env_ids=None) -> None:
++    if fixed_cube_pose is None:
++        return
++    cube = env.scene["cube"]
++    if env_ids is None:
++        env_ids_tensor = torch.arange(env.num_envs, dtype=torch.long, device=env.device)
++    else:
++        env_ids_tensor = torch.as_tensor(env_ids, dtype=torch.long, device=env.device)
++    if env_ids_tensor.numel() == 0:
++        return
++    pose_w = fixed_cube_pose.repeat(env_ids_tensor.numel(), 1)
++    pose_w[:, :3] += env.scene.env_origins[env_ids_tensor]
++    cube.write_root_pose_to_sim(pose_w, env_ids=env_ids_tensor)
++    cube.write_root_velocity_to_sim(
++        torch.zeros((env_ids_tensor.numel(), 6), dtype=torch.float32, device=env.device),
++        env_ids=env_ids_tensor,
++    )
++    env.sim.forward()
++
++
+ def _compute_pseudo_force_geometric(height_map: torch.Tensor) -> torch.Tensor:
+@@
+     env_cfg.sim.render_interval = env_cfg.decimation
+     env = gym.make(teacher_env_name, cfg=env_cfg).unwrapped
++    fixed_cube_pose = _parse_fixed_cube_pose(args_cli.fixed_cube_pose, env.device)
+     selected_background_texture = _configure_background_texture(
+         env,
+         mode=args_cli.background_mode,
+         fixed_texture=args_cli.background_texture,
+@@
+         "joint_action_label_source": "ik_controller_joint_pos_target",
+         "max_attempt_steps": int(max_attempt_steps),
++        "fixed_cube_pose": None if fixed_cube_pose is None else fixed_cube_pose[0].detach().cpu().numpy().tolist(),
+         "yaw_slack_deg": float(np.rad2deg(sm.yaw_slack)),
+@@
+     print(f"[INFO] Background texture: {selected_background_texture}")
+     print(f"[INFO] Seed: {run_seed}")
++    if fixed_cube_pose is not None:
++        print(f"[INFO] Fixed cube pose override (env frame): {fixed_cube_pose[0].detach().cpu().numpy().tolist()}")
+     print(f"[INFO] Sensors: wrist_cam={has_wrist_cam}, table_cam={has_table_cam}, "
+           f"gsmini_left={has_gsmini_left}, gsmini_right={has_gsmini_right}")
+ 
+     obs, _ = env.reset()
++    _apply_fixed_cube_pose(env, fixed_cube_pose)
+@@
+                 # Reset only timed-out environments and restart state machines there.
+                 env.reset(env_ids=timeout_ids)
++                _apply_fixed_cube_pose(env, fixed_cube_pose, timeout_ids)
+                 ee_pos_timeout = ee_frame.data.target_pos_w[:, 0] - env.scene.env_origins
+@@
+                 ee_quat_fresh = ee_frame.data.target_quat_w[:, 0]
++                _apply_fixed_cube_pose(env, fixed_cube_pose, env_reset_ids)
+                 sm.reset(env_reset_ids.tolist(), ee_pos_fresh, ee_quat_fresh)
+diff --git a/experiment/rebuild_dataset.sh b/experiment/rebuild_dataset.sh
+--- a/experiment/rebuild_dataset.sh
++++ b/experiment/rebuild_dataset.sh
+@@
+ NUM_DEMOS="${NUM_DEMOS:-200}"
+ NUM_ENVS="${NUM_ENVS:-4}"
+ SEED="${SEED:-1000}"
++FIXED_CUBE_POSE="${FIXED_CUBE_POSE:-}"
+ PHASE="${1:-all}"
+@@
+   mkdir -p "$RAW_DIR" "$ROOT/tmp"
+   cd "$ROOT/IsaacLab-Tactile"
++  extra_args=()
++  if [[ -n "$FIXED_CUBE_POSE" ]]; then
++    extra_args+=(--fixed_cube_pose "$FIXED_CUBE_POSE")
++  fi
+   set +e
+@@
+       --save_demos --output_dir "$RAW_DIR" \
+       --background_mode fixed --background_texture small_empty_house_4k.hdr \
++      "${extra_args[@]}" \
+       --enable_cameras --headless \
