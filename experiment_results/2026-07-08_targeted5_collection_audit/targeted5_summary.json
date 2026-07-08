@@ -1,0 +1,167 @@
+[
+  {
+    "pose_name": "center_cluster",
+    "target_pose": [
+      0.42500001192092896,
+      -0.11500000208616257,
+      0.02199999988079071
+    ],
+    "raw_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/smoke_joint_torque_w30_targeted5_n3_20260708_center_cluster/data.hdf5",
+    "repo_id": "targeted5_center_cluster_w30_n3_clean_v1",
+    "dataset_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/targeted5_center_cluster_w30_n3_clean_v1",
+    "raw_demos": 3,
+    "raw_success": 3,
+    "raw_frames": 616,
+    "clean_episodes": 3,
+    "clean_frames": 613,
+    "clean_frame_lengths": [
+      204,
+      204,
+      205
+    ],
+    "first_cube_pose_max_abs_error": 0.0,
+    "raw_terminal_l2_mean": 0.7986257870992025,
+    "raw_preterminal_l2_mean": 0.047549840062856674,
+    "clean_terminal_l2_mean": 0.047549840062856674,
+    "clean_terminal_l2_max": 0.050075653940439224,
+    "clean_action_state_l2_max": 0.1551603525876999,
+    "clean_action_state_l2_p95_mean": 0.13339769840240479,
+    "cube_z_max_mean": 0.2100311021010081,
+    "final_cube_basket_xy_mean": 0.015117849533756575,
+    "torque_min": -46.19048309326172,
+    "torque_max": 0.004970291163772345,
+    "data_parquet_bytes": 76902058
+  },
+  {
+    "pose_name": "right_center",
+    "target_pose": [
+      0.49799999594688416,
+      -0.11299999803304672,
+      0.02199999988079071
+    ],
+    "raw_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/smoke_joint_torque_w30_targeted5_n3_20260708_right_center/data.hdf5",
+    "repo_id": "targeted5_right_center_w30_n3_clean_v1",
+    "dataset_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/targeted5_right_center_w30_n3_clean_v1",
+    "raw_demos": 3,
+    "raw_success": 3,
+    "raw_frames": 613,
+    "clean_episodes": 3,
+    "clean_frames": 610,
+    "clean_frame_lengths": [
+      204,
+      207,
+      199
+    ],
+    "first_cube_pose_max_abs_error": 0.0,
+    "raw_terminal_l2_mean": 0.8360667030016581,
+    "raw_preterminal_l2_mean": 0.04952479153871536,
+    "clean_terminal_l2_mean": 0.04952479153871536,
+    "clean_terminal_l2_max": 0.05368945375084877,
+    "clean_action_state_l2_max": 0.13360095024108887,
+    "clean_action_state_l2_p95_mean": 0.11682283642391363,
+    "cube_z_max_mean": 0.20822685956954956,
+    "final_cube_basket_xy_mean": 0.011090737457076708,
+    "torque_min": -44.86463928222656,
+    "torque_max": 0.004373166710138321,
+    "data_parquet_bytes": 75556773
+  },
+  {
+    "pose_name": "right_upper",
+    "target_pose": [
+      0.4650000035762787,
+      -0.0689999982714653,
+      0.02199999988079071
+    ],
+    "raw_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/smoke_joint_torque_w30_targeted5_n3_20260708_right_upper/data.hdf5",
+    "repo_id": "targeted5_right_upper_w30_n3_clean_v1",
+    "dataset_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/targeted5_right_upper_w30_n3_clean_v1",
+    "raw_demos": 3,
+    "raw_success": 3,
+    "raw_frames": 612,
+    "clean_episodes": 3,
+    "clean_frames": 609,
+    "clean_frame_lengths": [
+      201,
+      208,
+      200
+    ],
+    "first_cube_pose_max_abs_error": 0.0,
+    "raw_terminal_l2_mean": 0.8851069808006287,
+    "raw_preterminal_l2_mean": 0.057308491319417953,
+    "clean_terminal_l2_mean": 0.057308491319417953,
+    "clean_terminal_l2_max": 0.06087692081928253,
+    "clean_action_state_l2_max": 0.13720086216926575,
+    "clean_action_state_l2_p95_mean": 0.11315346310536062,
+    "cube_z_max_mean": 0.20708105464776358,
+    "final_cube_basket_xy_mean": 0.01514345034956932,
+    "torque_min": -44.099525451660156,
+    "torque_max": 0.00249796686694026,
+    "data_parquet_bytes": 75535103
+  },
+  {
+    "pose_name": "right_lower",
+    "target_pose": [
+      0.4650000035762787,
+      -0.1469999998807907,
+      0.02199999988079071
+    ],
+    "raw_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/smoke_joint_torque_w30_targeted5_n3_20260708_right_lower/data.hdf5",
+    "repo_id": "targeted5_right_lower_w30_n3_clean_v1",
+    "dataset_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/targeted5_right_lower_w30_n3_clean_v1",
+    "raw_demos": 3,
+    "raw_success": 3,
+    "raw_frames": 613,
+    "clean_episodes": 3,
+    "clean_frames": 610,
+    "clean_frame_lengths": [
+      206,
+      204,
+      200
+    ],
+    "first_cube_pose_max_abs_error": 0.0,
+    "raw_terminal_l2_mean": 0.8005785346031189,
+    "raw_preterminal_l2_mean": 0.054157137870788574,
+    "clean_terminal_l2_mean": 0.054157137870788574,
+    "clean_terminal_l2_max": 0.05975984036922455,
+    "clean_action_state_l2_max": 0.1349218338727951,
+    "clean_action_state_l2_p95_mean": 0.11965333359936874,
+    "cube_z_max_mean": 0.2141053924957911,
+    "final_cube_basket_xy_mean": 0.015064232206592957,
+    "torque_min": -43.44154357910156,
+    "torque_max": 0.006596412044018507,
+    "data_parquet_bytes": 76509535
+  },
+  {
+    "pose_name": "left_lower",
+    "target_pose": [
+      0.3499999940395355,
+      -0.17399999499320984,
+      0.02199999988079071
+    ],
+    "raw_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/smoke_joint_torque_w30_targeted5_n3_20260708_left_lower/data.hdf5",
+    "repo_id": "targeted5_left_lower_w30_n3_clean_v1",
+    "dataset_path": "_runtime/remote_handoff_gripper_lstm_work/persistent/datasets/targeted5_left_lower_w30_n3_clean_v1",
+    "raw_demos": 3,
+    "raw_success": 3,
+    "raw_frames": 623,
+    "clean_episodes": 3,
+    "clean_frames": 620,
+    "clean_frame_lengths": [
+      213,
+      209,
+      198
+    ],
+    "first_cube_pose_max_abs_error": 0.0,
+    "raw_terminal_l2_mean": 0.7946623762448629,
+    "raw_preterminal_l2_mean": 0.050586083283027015,
+    "clean_terminal_l2_mean": 0.05058608204126358,
+    "clean_terminal_l2_max": 0.05165064334869385,
+    "clean_action_state_l2_max": 0.3174465298652649,
+    "clean_action_state_l2_p95_mean": 0.2338986615339914,
+    "cube_z_max_mean": 0.21364471316337585,
+    "final_cube_basket_xy_mean": 0.01506659264365832,
+    "torque_min": -44.168357849121094,
+    "torque_max": 0.008640904910862446,
+    "data_parquet_bytes": 77852189
+  }
+]
