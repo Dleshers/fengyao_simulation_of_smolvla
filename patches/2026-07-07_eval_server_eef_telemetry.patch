@@ -1,0 +1,58 @@
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+index 0000000..0000000 100644
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@
+     def _scene_snapshot(self) -> dict[str, Any]:
+         robot = self.env.scene["robot"]
++        ee_frame = self.env.scene["ee_frame"]
+         env_origin = self.env.scene.env_origins[0]
+ 
+         def position(name: str) -> list[float] | None:
+             try:
+                 value = self.env.scene[name].data.root_pos_w[0] - env_origin
+                 return value.detach().cpu().numpy().astype(np.float32).tolist()
+             except Exception:
+                 return None
+ 
++        eef_pos = (ee_frame.data.target_pos_w[:, 0] - self.env.scene.env_origins)[0]
++        eef_pos_list = eef_pos.detach().cpu().numpy().astype(np.float32).tolist()
++        cube_pos = position("cube")
++        basket_pos = position("basket")
++
++        def distance_to_eef(pos: list[float] | None) -> float | None:
++            if pos is None:
++                return None
++            return float(np.linalg.norm(np.asarray(eef_pos_list, dtype=np.float32) - np.asarray(pos, dtype=np.float32)))
++
+         return {
+             "episode": self._episode_index,
+             "seed": self._episode_seed,
+             "step": self._step_count,
+             "joint_pos": robot.data.joint_pos[0, :7].detach().cpu().numpy().astype(np.float32).tolist(),
+             "joint_vel": robot.data.joint_vel[0, :7].detach().cpu().numpy().astype(np.float32).tolist(),
+             "gripper_qpos": robot.data.joint_pos[0, -2:].detach().cpu().numpy().astype(np.float32).tolist(),
+-            "cube_pos": position("cube"),
+-            "basket_pos": position("basket"),
++            "eef_pos": eef_pos_list,
++            "cube_pos": cube_pos,
++            "basket_pos": basket_pos,
++            "eef_cube_dist": distance_to_eef(cube_pos),
++            "eef_basket_dist": distance_to_eef(basket_pos),
+         }
+@@
+         self._write_trajectory({
+             "event": "step", "episode": self._episode_index, "seed": self._episode_seed,
+             "step": self._step_count, "action": action.tolist(),
++            "action_gripper_cmd": float(action[7]) if action.size > 7 else float(action[-1]),
++            "action_gripper_sign": int(np.sign(action[7] if action.size > 7 else action[-1])),
++            "action_chunk_index_50": int((self._step_count - 1) // 50),
+             "joint_pos_before": before["joint_pos"], "joint_pos_after": after["joint_pos"],
+             "joint_vel_after": after["joint_vel"], "gripper_qpos_after": after["gripper_qpos"],
++            "eef_pos_before": before["eef_pos"], "eef_pos_after": after["eef_pos"],
++            "eef_cube_dist_before": before["eef_cube_dist"], "eef_cube_dist_after": after["eef_cube_dist"],
++            "eef_basket_dist_before": before["eef_basket_dist"], "eef_basket_dist_after": after["eef_basket_dist"],
+             "cube_pos_after": after["cube_pos"], "basket_pos_after": after["basket_pos"],
+             "joint_target_error_l2": target_error, "reward": reward_val, "done": done,
+             "is_success": is_success,
+         })

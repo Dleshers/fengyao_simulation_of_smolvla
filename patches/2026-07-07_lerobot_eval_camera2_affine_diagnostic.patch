@@ -1,0 +1,47 @@
+*** Runtime diagnostic patch (manual archive)
+*** Target: _runtime/remote_handoff_gripper_lstm_work/lerobot-tactile/src/lerobot/scripts/lerobot_eval.py
+*** Purpose:
+***   Add a default-off policy-input camera2 affine normalization diagnostic.
+***   This is for single-episode visual-domain-shift debugging only, not for
+***   benchmark evaluation.
+
+@@
+ def _parse_snapshot_steps(spec: str | None) -> set[int]:
+@@
+     return steps
+ 
+ 
++def _apply_eval_image_diagnostics(observation: dict[str, Any]) -> dict[str, Any]:
++    """Optional, env-var-controlled policy-input image diagnostics.
++
++    These switches are intentionally narrow and default-off.  They are used for
++    single-episode debugging of visual-domain shift and should not be treated as
++    benchmark evaluation settings.
++    """
++
++    if os.environ.get("LEROBOT_EVAL_CAMERA2_TRAIN_AFFINE", "").lower() not in {"1", "true", "yes"}:
++        return observation
++
++    key = os.environ.get("LEROBOT_EVAL_CAMERA2_KEY", "observation.images.camera2")
++    image = observation.get(key)
++    if not isinstance(image, torch.Tensor):
++        return observation
++
++    target_mean = float(os.environ.get("LEROBOT_EVAL_CAMERA2_TARGET_MEAN", "0.441604882478714"))
++    target_std = float(os.environ.get("LEROBOT_EVAL_CAMERA2_TARGET_STD", "0.206113621592522"))
++    current_mean = image.mean()
++    current_std = image.std(unbiased=False).clamp_min(1e-6)
++    observation = dict(observation)
++    observation[key] = ((image - current_mean) / current_std * target_std + target_mean).clamp(0.0, 1.0)
++    return observation
++
++
+ def _tensor_to_jsonable(value: Any, max_items: int = 64) -> Any:
+
+@@
+         env_observation = deepcopy(observation)
+ 
+         observation = preprocessor(observation)
++        observation = _apply_eval_image_diagnostics(observation)
+         with torch.inference_mode():
+             action = policy.select_action(observation)

@@ -1,0 +1,212 @@
+{
+  "orig": {
+    "arm_drift_l2_vs_orig_abs_mean": 0.0,
+    "arm_drift_l2_vs_orig_abs_max": 0.0,
+    "arm_drift_linf_vs_orig_abs_mean": 0.0,
+    "arm_drift_linf_vs_orig_abs_max": 0.0,
+    "gripper_drift_vs_orig_abs_mean": 0.0,
+    "gripper_drift_vs_orig_abs_max": 0.0,
+    "arm_l2_vs_recorded_abs_mean": 0.026071401046855108,
+    "arm_l2_vs_recorded_abs_max": 0.049537546932697296,
+    "gripper_delta_vs_recorded_abs_mean": 0.008707216807774134,
+    "gripper_delta_vs_recorded_abs_max": 0.017592430114746094,
+    "signs": [
+      1,
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      -1
+    ],
+    "gripper_preds": [
+      1.0008783340454102,
+      0.9969863891601562,
+      0.9621646404266357,
+      0.9696917533874512,
+      -1.0138204097747803,
+      -1.0127506256103516,
+      -1.030367374420166
+    ]
+  },
+  "cam2_train_affine": {
+    "arm_drift_l2_vs_orig_abs_mean": 0.047707002077783854,
+    "arm_drift_l2_vs_orig_abs_max": 0.15557125210762024,
+    "arm_drift_linf_vs_orig_abs_mean": 0.033797829544969966,
+    "arm_drift_linf_vs_orig_abs_max": 0.09384697675704956,
+    "gripper_drift_vs_orig_abs_mean": 0.013009820665631975,
+    "gripper_drift_vs_orig_abs_max": 0.024649977684020996,
+    "arm_l2_vs_recorded_abs_mean": 0.04326910824914064,
+    "arm_l2_vs_recorded_abs_max": 0.17868530750274658,
+    "gripper_delta_vs_recorded_abs_mean": 0.012969425746372767,
+    "gripper_delta_vs_recorded_abs_max": 0.027065515518188477,
+    "signs": [
+      1,
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      -1
+    ],
+    "gripper_preds": [
+      1.0183050632476807,
+      0.986629843711853,
+      0.9742594957351685,
+      0.9841868877410889,
+      -0.9891704320907593,
+      -1.0071028470993042,
+      -1.0367650985717773
+    ]
+  },
+  "cam2_zero": {
+    "arm_drift_l2_vs_orig_abs_mean": 0.05146304704248905,
+    "arm_drift_l2_vs_orig_abs_max": 0.14670027792453766,
+    "arm_drift_linf_vs_orig_abs_mean": 0.033681699207850864,
+    "arm_drift_linf_vs_orig_abs_max": 0.0745832771062851,
+    "gripper_drift_vs_orig_abs_mean": 0.012919511113848006,
+    "gripper_drift_vs_orig_abs_max": 0.035425662994384766,
+    "arm_l2_vs_recorded_abs_mean": 0.05320625965084348,
+    "arm_l2_vs_recorded_abs_max": 0.17000070214271545,
+    "gripper_delta_vs_recorded_abs_mean": 0.016867961202348982,
+    "gripper_delta_vs_recorded_abs_max": 0.033435702323913574,
+    "signs": [
+      1,
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      -1
+    ],
+    "gripper_preds": [
+      1.0034018754959106,
+      0.9615607261657715,
+      0.9580249786376953,
+      0.9690039157867432,
+      -0.9828002452850342,
+      -0.9965159893035889,
+      -1.0299623012542725
+    ]
+  },
+  "cam2_flat_train_mean": {
+    "arm_drift_l2_vs_orig_abs_mean": 0.04017503639417035,
+    "arm_drift_l2_vs_orig_abs_max": 0.07924329489469528,
+    "arm_drift_linf_vs_orig_abs_mean": 0.03028908504971436,
+    "arm_drift_linf_vs_orig_abs_max": 0.06606495380401611,
+    "gripper_drift_vs_orig_abs_mean": 0.019025938851492747,
+    "gripper_drift_vs_orig_abs_max": 0.04598712921142578,
+    "arm_l2_vs_recorded_abs_mean": 0.04911777616611549,
+    "arm_l2_vs_recorded_abs_max": 0.10146960616111755,
+    "gripper_delta_vs_recorded_abs_mean": 0.022040401186261858,
+    "gripper_delta_vs_recorded_abs_max": 0.06357955932617188,
+    "signs": [
+      1,
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      -1
+    ],
+    "gripper_preds": [
+      0.9777412414550781,
+      0.9608391523361206,
+      0.91617751121521,
+      0.9473468065261841,
+      -1.0177593231201172,
+      -1.0134211778640747,
+      -1.0294116735458374
+    ]
+  },
+  "cam1_train_affine": {
+    "arm_drift_l2_vs_orig_abs_mean": 0.02902092624987875,
+    "arm_drift_l2_vs_orig_abs_max": 0.06892705708742142,
+    "arm_drift_linf_vs_orig_abs_mean": 0.023810123758656637,
+    "arm_drift_linf_vs_orig_abs_max": 0.0661483108997345,
+    "gripper_drift_vs_orig_abs_mean": 0.009331039019993373,
+    "gripper_drift_vs_orig_abs_max": 0.015296339988708496,
+    "arm_l2_vs_recorded_abs_mean": 0.04374870019299643,
+    "arm_l2_vs_recorded_abs_max": 0.07389511913061142,
+    "gripper_delta_vs_recorded_abs_mean": 0.008544121469770159,
+    "gripper_delta_vs_recorded_abs_max": 0.02825605869293213,
+    "signs": [
+      1,
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      -1
+    ],
+    "gripper_preds": [
+      1.0096086263656616,
+      0.9850947856903076,
+      0.9515010118484497,
+      0.9543954133987427,
+      -1.0204010009765625,
+      -1.0047649145126343,
+      -1.0261982679367065
+    ]
+  },
+  "both_train_affine": {
+    "arm_drift_l2_vs_orig_abs_mean": 0.03647656925022602,
+    "arm_drift_l2_vs_orig_abs_max": 0.055619072169065475,
+    "arm_drift_linf_vs_orig_abs_mean": 0.0294264161161014,
+    "arm_drift_linf_vs_orig_abs_max": 0.050562769174575806,
+    "gripper_drift_vs_orig_abs_mean": 0.00931586538042341,
+    "gripper_drift_vs_orig_abs_max": 0.017398595809936523,
+    "arm_l2_vs_recorded_abs_mean": 0.03574899610664163,
+    "arm_l2_vs_recorded_abs_max": 0.06858034431934357,
+    "gripper_delta_vs_recorded_abs_mean": 0.008120366505214147,
+    "gripper_delta_vs_recorded_abs_max": 0.016417503356933594,
+    "signs": [
+      1,
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      -1
+    ],
+    "gripper_preds": [
+      1.002517819404602,
+      0.9811198711395264,
+      0.970041036605835,
+      0.977986216545105,
+      -1.0227506160736084,
+      -1.017956018447876,
+      -1.0129687786102295
+    ]
+  },
+  "swap_cameras": {
+    "arm_drift_l2_vs_orig_abs_mean": 0.042170546150633266,
+    "arm_drift_l2_vs_orig_abs_max": 0.06972562521696091,
+    "arm_drift_linf_vs_orig_abs_mean": 0.03306367780481066,
+    "arm_drift_linf_vs_orig_abs_max": 0.058714866638183594,
+    "gripper_drift_vs_orig_abs_mean": 0.016156571252005442,
+    "gripper_drift_vs_orig_abs_max": 0.027172088623046875,
+    "arm_l2_vs_recorded_abs_mean": 0.046200748799102645,
+    "arm_l2_vs_recorded_abs_max": 0.09406258910894394,
+    "gripper_delta_vs_recorded_abs_mean": 0.016004017421177456,
+    "gripper_delta_vs_recorded_abs_max": 0.026044607162475586,
+    "signs": [
+      1,
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      -1
+    ],
+    "gripper_preds": [
+      1.012644648551941,
+      0.9777793884277344,
+      0.9588979482650757,
+      0.9425196647644043,
+      -0.992545485496521,
+      -1.0341863632202148,
+      -1.02139413356781
+    ]
+  }
+}

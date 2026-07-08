@@ -1,0 +1,33 @@
+diff --git a/lerobot/scripts/lerobot_eval.py b/lerobot/scripts/lerobot_eval.py
+--- a/lerobot/scripts/lerobot_eval.py
++++ b/lerobot/scripts/lerobot_eval.py
+@@
++# Diagnostic-only patch used on 2026-07-07.
++#
++# Adds optional environment-variable controlled policy-input snapshots to
++# lerobot-eval.  Default behavior is unchanged unless both variables are set:
++#
++#   LEROBOT_EVAL_SNAPSHOT_DIR=/path/to/output
++#   LEROBOT_EVAL_SNAPSHOT_STEPS=0,20,40,57,60,80,120
++#
++# For selected rollout steps, save:
++#   - snapshot.json with raw/env/policy observation keys, tensor stats, state head,
++#     and postprocessed/env action head
++#   - PNGs for every policy observation key starting with observation.images.
++#
++# Runtime file patched during the local audit:
++#   _runtime/remote_handoff_gripper_lstm_work/lerobot-tactile/src/lerobot/scripts/lerobot_eval.py
++#
++# The implementation added:
++#   - import os
++#   - _parse_snapshot_steps
++#   - _tensor_to_jsonable
++#   - _save_image_tensor
++#   - _save_eval_snapshot
++#   - three lines in rollout() to read env vars
++#   - deepcopy(raw_observation) before preprocess_observation()
++#   - deepcopy(env_observation) after env_preprocessor()
++#   - a call to _save_eval_snapshot() after env_postprocessor()
++#
++# This archive is intentionally descriptive rather than a directly applicable
++# full patch because the runtime LeRobot checkout is under ignored _runtime/.

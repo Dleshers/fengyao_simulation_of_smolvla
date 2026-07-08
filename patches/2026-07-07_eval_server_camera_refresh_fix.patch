@@ -1,0 +1,10 @@
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@
+-            env_cfg = parse_env_cfg(self.env_name, device=self.device, num_envs=1, use_fabric=False)
++            # Keep the task's default Fabric scene synchronization.  Forcing
++            # ``use_fabric=False`` left PhysX tensor state live while RTX camera
++            # renders retained reset-time articulation/object transforms in
++            # headless evaluation.  Collection/replay also use the task default.
++            env_cfg = parse_env_cfg(self.env_name, device=self.device, num_envs=1)

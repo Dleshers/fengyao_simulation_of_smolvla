@@ -1,0 +1,150 @@
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@
+         _, reward, terminated, truncated, info = self.env.step(action_tensor)
+@@
+-        done = bool(terminated[0].item()) if torch.is_tensor(terminated) else bool(terminated)
+-        done = done or (bool(truncated[0].item()) if torch.is_tensor(truncated) else bool(truncated))
++        env_done = bool(terminated[0].item()) if torch.is_tensor(terminated) else bool(terminated)
++        env_done = env_done or (bool(truncated[0].item()) if torch.is_tensor(truncated) else bool(truncated))
++        done = env_done
+@@
+-        if self._step_count >= self._max_episode_steps:
++        hit_max_steps = self._step_count >= self._max_episode_steps
++        if hit_max_steps:
+             done = True
+@@
+-        if done and "success" in termination_terms:
++        if env_done and "success" in termination_terms:
+             is_success = termination_terms["success"]
+         else:
+             is_success = self._check_success()
+@@
+-            "is_success": is_success, "termination_terms": termination_terms,
+-            "post_step_scene_was_auto_reset": bool(done),
++            "is_success": is_success, "termination_terms": termination_terms,
++            "env_step_done": bool(env_done),
++            "hit_max_steps": bool(hit_max_steps),
++            "post_step_scene_was_auto_reset": bool(env_done),
+         })
+@@
+             "step": self._step_count,
+             "is_success": is_success,
+             "termination_terms": termination_terms,
++            "env_step_done": bool(env_done),
++            "hit_max_steps": bool(hit_max_steps),
+         }
+@@
+         elif cmd == "step":
+             action = np.array(request["action"], dtype=np.float32)
+             obs, reward, terminated, info = self.env.step(action)
++            truncated = bool(info.get("hit_max_steps", False))
++            env_step_done = bool(info.get("env_step_done", terminated and not truncated))
+             return {
+                 "obs": obs,
+                 "reward": reward,
+-                "terminated": terminated,
++                "done": bool(terminated),
++                "terminated": bool(env_step_done),
++                "truncated": truncated,
+                 "info": info,
+             }
+diff --git a/src/lerobot/envs/isaaclab_tactile_remote.py b/src/lerobot/envs/isaaclab_tactile_remote.py
+--- a/src/lerobot/envs/isaaclab_tactile_remote.py
++++ b/src/lerobot/envs/isaaclab_tactile_remote.py
+@@
+         response = self._send_request(request)
+ 
+         obs = self._process_observation(response.get("obs", {}))
+         reward = float(response.get("reward", 0.0))
+-        terminated = bool(response.get("terminated", False) or response.get("done", False))
+-        truncated = self._step_count >= self.max_episode_steps
+         info = response.get("info", {})
++
++        is_success = bool(info.get("is_success", False))
++        server_terminated = bool(response.get("terminated", False))
++        server_truncated = bool(response.get("truncated", False) or info.get("hit_max_steps", False))
++        local_truncated = self._step_count >= self.max_episode_steps
++
++        terminated = server_terminated
++        truncated = bool(server_truncated or local_truncated)
++
++        info["is_success"] = is_success
++        info["success"] = is_success
++        info["terminated"] = terminated
++        info["truncated"] = truncated
++        if terminated or truncated:
++            info["final_info"] = {
++                "is_success": is_success,
++                "success": is_success,
++                "termination_terms": info.get("termination_terms", {}),
++                "env_step_done": bool(info.get("env_step_done", server_terminated)),
++                "hit_max_steps": bool(info.get("hit_max_steps", truncated and not terminated)),
++            }
+ 
+         return obs, reward, terminated, truncated, info
+diff --git a/src/lerobot/scripts/lerobot_eval.py b/src/lerobot/scripts/lerobot_eval.py
+--- a/src/lerobot/scripts/lerobot_eval.py
++++ b/src/lerobot/scripts/lerobot_eval.py
+@@
++def _coerce_success_list(value: Any, num_envs: int) -> list[bool] | None:
++    """Convert scalar/list/array success payloads to one bool per env."""
++    if value is None:
++        return None
++    if isinstance(value, torch.Tensor):
++        value = value.detach().cpu().numpy()
++    arr = np.asarray(value, dtype=bool)
++    if arr.ndim == 0:
++        return [bool(arr.item())] * num_envs
++    arr = arr.reshape(-1)
++    if arr.size == num_envs:
++        return [bool(x) for x in arr.tolist()]
++    if arr.size == 1:
++        return [bool(arr.item())] * num_envs
++    return None
++
++
++def _extract_successes_from_info(info: dict[str, Any], num_envs: int) -> list[bool]:
++    """Read task success from Gymnasium and IsaacLab remote-env info payloads."""
++    final_info = info.get("final_info")
++    if final_info is not None:
++        if isinstance(final_info, dict):
++            successes = _coerce_success_list(final_info.get("is_success"), num_envs)
++            if successes is None:
++                successes = _coerce_success_list(final_info.get("success"), num_envs)
++            if successes is not None:
++                return successes
++        elif isinstance(final_info, (list, tuple, np.ndarray)):
++            values = []
++            for item in list(final_info):
++                if isinstance(item, dict):
++                    values.append(bool(item.get("is_success", item.get("success", False))))
++                else:
++                    values.append(False)
++            if len(values) == num_envs:
++                return values
++        else:
++            raise RuntimeError(
++                "Unsupported `final_info` format: expected dict/list/array with is_success values."
++            )
++
++    for key in ("is_success", "success"):
++        successes = _coerce_success_list(info.get(key), num_envs)
++        if successes is not None:
++            return successes
++
++    return [False] * num_envs
++
+@@
+-        if "final_info" in info:
+-            final_info = info["final_info"]
+-            if not isinstance(final_info, dict):
+-                raise RuntimeError(
+-                    "Unsupported `final_info` format: expected dict (Gymnasium >= 1.0). "
+-                    "You're likely using an older version of gymnasium (< 1.0). Please upgrade."
+-                )
+-            successes = final_info["is_success"].tolist()
+-        else:
+-            successes = [False] * env.num_envs
++        successes = _extract_successes_from_info(info, env.num_envs)

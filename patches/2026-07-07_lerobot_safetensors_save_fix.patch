@@ -1,0 +1,58 @@
+diff --git a/src/lerobot/policies/pretrained.py b/src/lerobot/policies/pretrained.py
+index e730b78..17d102b 100644
+--- a/src/lerobot/policies/pretrained.py
++++ b/src/lerobot/policies/pretrained.py
+@@ -26,7 +26,11 @@ import safetensors
+ from huggingface_hub import HfApi, ModelCard, ModelCardData, hf_hub_download
+ from huggingface_hub.constants import SAFETENSORS_SINGLE_FILE
+ from huggingface_hub.errors import HfHubHTTPError
+-from safetensors.torch import load_model as load_model_as_safetensor, save_model as save_model_as_safetensor
++from safetensors.torch import (
++    load_model as load_model_as_safetensor,
++    save_file as save_file_as_safetensor,
++    save_model as save_model_as_safetensor,
++)
+ from torch import Tensor, nn
+ from typing_extensions import Unpack
+ 
+@@ -70,7 +74,23 @@ class PreTrainedPolicy(nn.Module, HubMixin, abc.ABC):
+     def _save_pretrained(self, save_directory: Path) -> None:
+         self.config._save_pretrained(save_directory)
+         model_to_save = self.module if hasattr(self, "module") else self
+-        save_model_as_safetensor(model_to_save, str(save_directory / SAFETENSORS_SINGLE_FILE))
++        save_path = str(save_directory / SAFETENSORS_SINGLE_FILE)
++        try:
++            save_model_as_safetensor(model_to_save, save_path)
++        except (RuntimeError, ValueError) as exc:
++            message = str(exc)
++            if "shared" not in message.lower() and "storage" not in message.lower():
++                raise
++            logging.warning(
++                "safetensors.save_model failed because of shared/view storage; "
++                "saving a cloned contiguous state_dict instead. Original error: %s",
++                exc,
++            )
++            state_dict = {
++                key: tensor.detach().cpu().contiguous().clone()
++                for key, tensor in model_to_save.state_dict().items()
++            }
++            save_file_as_safetensor(state_dict, save_path)
+ 
+     @classmethod
+     def from_pretrained(
+diff --git a/src/lerobot/policies/smolvla/configuration_smolvla.py b/src/lerobot/policies/smolvla/configuration_smolvla.py
+index 937168c..d5730d7 100644
+--- a/src/lerobot/policies/smolvla/configuration_smolvla.py
++++ b/src/lerobot/policies/smolvla/configuration_smolvla.py
+@@ -125,7 +125,10 @@ class SmolVLAConfig(PreTrainedConfig):
+     # How to organize tactile tokens in prefix
+     # - "per_fingertip_per_branch": 2*N tokens (one force + one spatial per fingertip)
+     # - "per_branch_pooled": 2 tokens (pooled force + pooled spatial across fingertips)
+-    tactile_token_mode: Literal["per_fingertip_per_branch", "per_branch_pooled"] = "per_fingertip_per_branch"
++    # Keep this as ``str`` rather than ``Literal[...]`` because the current
++    # draccus decoder used by the remote LeRobot environment cannot parse
++    # Literal annotations from saved checkpoint JSON.
++    tactile_token_mode: str = "per_fingertip_per_branch"
+ 
+     # CAE latent dimension (paper uses 128)
+     tactile_latent_dim: int = 128

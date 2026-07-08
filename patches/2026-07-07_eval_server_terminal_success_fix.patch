@@ -1,0 +1,26 @@
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@
++        # ManagerBasedRLEnv auto-resets completed environments inside step().
++        # Preserve the transition result from the termination manager.
++        termination_terms = {}
++        termination_manager = getattr(self.env, "termination_manager", None)
++        if termination_manager is not None:
++            for term_name in termination_manager.active_terms:
++                term_value = termination_manager.get_term(term_name)
++                termination_terms[term_name] = bool(term_value[0].item())
+@@
+-        is_success = self._check_success()
++        if done and "success" in termination_terms:
++            is_success = termination_terms["success"]
++        else:
++            is_success = self._check_success()
+@@
++            "cube_pos_before": before["cube_pos"], "basket_pos_before": before["basket_pos"],
++            "termination_terms": termination_terms,
++            "post_step_scene_was_auto_reset": bool(done),
+@@
+-        info_dict = {"step": self._step_count, "is_success": is_success}
++        info_dict = {"step": self._step_count, "is_success": is_success,
++                     "termination_terms": termination_terms}

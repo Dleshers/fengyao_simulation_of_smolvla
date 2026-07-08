@@ -1,0 +1,67 @@
+diff --git a/IsaacLab-Tactile/scripts/eval_server.py b/IsaacLab-Tactile/scripts/eval_server.py
+--- a/IsaacLab-Tactile/scripts/eval_server.py
++++ b/IsaacLab-Tactile/scripts/eval_server.py
+@@
+     parser.add_argument("--trajectory-log", type=str, default="", help="Optional JSONL control telemetry path.")
++    parser.add_argument(
++        "--gripper-close-gate-eef-cube-dist",
++        type=float,
++        default=0.0,
++        help=(
++            "Diagnostic only: if >0, suppress negative gripper close commands until "
++            "EEF-cube distance is <= this threshold in meters."
++        ),
++    )
+@@
+         trajectory_log: str = "",
++        gripper_close_gate_eef_cube_dist: float = 0.0,
+@@
++        self.gripper_close_gate_eef_cube_dist = float(gripper_close_gate_eef_cube_dist or 0.0)
++        if self.gripper_close_gate_eef_cube_dist > 0:
++            logger.info(
++                "Gripper close gate diagnostic enabled: close only when EEF-cube <= %.4f m",
++                self.gripper_close_gate_eef_cube_dist,
++            )
+@@
+-        action = np.asarray(request["action"], dtype=np.float32)
++        action = np.asarray(request["action"], dtype=np.float32)
++        raw_action = action.copy()
++        gripper_index = 7 if action.size > 7 else action.size - 1
++        gripper_gate_applied = False
+         before = self._scene_snapshot()
++        if (
++            self.gripper_close_gate_eef_cube_dist > 0
++            and action.size > 0
++            and action[gripper_index] < 0
++            and before.get("eef_cube_dist") is not None
++            and before["eef_cube_dist"] > self.gripper_close_gate_eef_cube_dist
++        ):
++            action[gripper_index] = 1.0
++            gripper_gate_applied = True
+@@
+         self._write_trajectory({
+             "event": "step",
+             "step": self._step_count,
++            "raw_action": raw_action.tolist(),
++            "raw_action_gripper_cmd": float(raw_action[gripper_index]),
+             "action": action.tolist(),
+-            "action_gripper_cmd": float(action[-1]),
+-            "action_gripper_sign": int(np.sign(action[-1])),
++            "action_gripper_cmd": float(action[gripper_index]),
++            "action_gripper_sign": int(np.sign(action[gripper_index])),
++            "gripper_close_gate_applied": gripper_gate_applied,
++            "gripper_close_gate_threshold": self.gripper_close_gate_eef_cube_dist,
+             ...
+         })
+@@
+         trajectory_log=args_cli.trajectory_log,
++        gripper_close_gate_eef_cube_dist=args_cli.gripper_close_gate_eef_cube_dist,
+     )
+diff --git a/experiment/run_eval_server.sh b/experiment/run_eval_server.sh
+--- a/experiment/run_eval_server.sh
++++ b/experiment/run_eval_server.sh
+@@
+   ${TRAJECTORY_LOG:+--trajectory-log="$TRAJECTORY_LOG"} \
+   ${FIXED_CUBE_POSE:+--fixed-cube-pose="$FIXED_CUBE_POSE"} \
++  ${GRIPPER_CLOSE_GATE_EEF_CUBE_DIST:+--gripper-close-gate-eef-cube-dist="$GRIPPER_CLOSE_GATE_EEF_CUBE_DIST"} \
+   "${EXTRA[@]}"

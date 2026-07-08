@@ -1,0 +1,323 @@
+{
+  "n_samples": 600,
+  "observation.images.camera1.mean": {
+    "min": 0.5882371068000793,
+    "p01": 0.7235465049743652,
+    "p05": 0.7261947393417358,
+    "p50": 0.7332273721694946,
+    "p95": 0.7445234060287476,
+    "p99": 0.7477837800979614,
+    "max": 0.7499501705169678,
+    "mean": 0.7335004245241483
+  },
+  "observation.images.camera1.std": {
+    "min": 0.24021103978157043,
+    "p01": 0.24249063432216644,
+    "p05": 0.24534805119037628,
+    "p50": 0.2509204149246216,
+    "p95": 0.2572837173938751,
+    "p99": 0.25911858677864075,
+    "max": 0.38773414492607117,
+    "mean": 0.2513675441592932
+  },
+  "observation.images.camera1.min": {
+    "min": 0.0,
+    "p01": 0.0,
+    "p05": 0.0,
+    "p50": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "max": 0.0,
+    "mean": 0.0
+  },
+  "observation.images.camera1.max": {
+    "min": 1.0,
+    "p01": 1.0,
+    "p05": 1.0,
+    "p50": 1.0,
+    "p95": 1.0,
+    "p99": 1.0,
+    "max": 1.0,
+    "mean": 1.0
+  },
+  "observation.images.camera2.mean": {
+    "min": 0.18324078619480133,
+    "p01": 0.4166451394557953,
+    "p05": 0.4215010106563568,
+    "p50": 0.441604882478714,
+    "p95": 0.488153874874115,
+    "p99": 0.49310338497161865,
+    "max": 0.6094189882278442,
+    "mean": 0.45012195251882076
+  },
+  "observation.images.camera2.std": {
+    "min": 1.7881393432617188e-07,
+    "p01": 0.18846744298934937,
+    "p05": 0.19152098894119263,
+    "p50": 0.20611362159252167,
+    "p95": 0.2414110004901886,
+    "p99": 0.25146374106407166,
+    "max": 0.3494814932346344,
+    "mean": 0.21321474678814412
+  },
+  "observation.images.camera2.min": {
+    "min": 0.0,
+    "p01": 0.0,
+    "p05": 0.0,
+    "p50": 0.0,
+    "p95": 0.003921568859368563,
+    "p99": 0.007843137718737125,
+    "max": 0.6078431606292725,
+    "mean": 0.002627451093867421
+  },
+  "observation.images.camera2.max": {
+    "min": 0.6078431606292725,
+    "p01": 0.9529411792755127,
+    "p05": 0.9607843160629272,
+    "p50": 0.9921568632125854,
+    "p95": 1.0,
+    "p99": 1.0,
+    "max": 1.0,
+    "mean": 0.9865751641988755
+  },
+  "eval_snapshot_stats": [
+    {
+      "step": 0,
+      "observation.images.camera1.mean": 0.708939254283905,
+      "observation.images.camera1.std": 0.26335620880126953,
+      "observation.images.camera1.min": 0.0,
+      "observation.images.camera1.max": 1.0,
+      "observation.images.camera2.mean": 0.5736712217330933,
+      "observation.images.camera2.std": 0.286857545375824,
+      "observation.images.camera2.min": 0.0,
+      "observation.images.camera2.max": 0.9921568632125854,
+      "state_head_normalized": [
+        0.2261343002319336,
+        -1.0010002851486206,
+        -0.11395261436700821,
+        -0.1427631378173828,
+        -0.5721800923347473,
+        -0.73384690284729,
+        0.3235156238079071,
+        1.3636784553527832,
+        1.3644288778305054
+      ],
+      "action_head": [
+        0.045216236263513565,
+        -0.1746188998222351,
+        -0.15499788522720337,
+        -2.5388076305389404,
+        -0.02732420712709427,
+        2.418135166168213,
+        0.6562384366989136,
+        1.0063608884811401
+      ],
+      "observation.images.camera1.mean_train_percentile": 0.0033333333333333335,
+      "observation.images.camera2.mean_train_percentile": 0.995
+    },
+    {
+      "step": 20,
+      "observation.images.camera1.mean": 0.719629168510437,
+      "observation.images.camera1.std": 0.258674293756485,
+      "observation.images.camera1.min": 0.0,
+      "observation.images.camera1.max": 1.0,
+      "observation.images.camera2.mean": 0.5938306450843811,
+      "observation.images.camera2.std": 0.2710702419281006,
+      "observation.images.camera2.min": 0.0,
+      "observation.images.camera2.max": 0.9843137264251709,
+      "state_head_normalized": [
+        -0.4186041057109833,
+        -1.2064975500106812,
+        -0.849906861782074,
+        -0.6938400268554688,
+        -0.7250019907951355,
+        -0.5537234544754028,
+        -0.11055586487054825,
+        1.3636784553527832,
+        1.3642632961273193
+      ],
+      "action_head": [
+        -0.05310966074466705,
+        -0.20602157711982727,
+        -0.2688785791397095,
+        -2.65006422996521,
+        -0.05855700373649597,
+        2.4683234691619873,
+        0.4727334976196289,
+        0.9885560274124146
+      ],
+      "observation.images.camera1.mean_train_percentile": 0.0033333333333333335,
+      "observation.images.camera2.mean_train_percentile": 0.995
+    },
+    {
+      "step": 40,
+      "observation.images.camera1.mean": 0.7205169796943665,
+      "observation.images.camera1.std": 0.258437842130661,
+      "observation.images.camera1.min": 0.0,
+      "observation.images.camera1.max": 1.0,
+      "observation.images.camera2.mean": 0.595752477645874,
+      "observation.images.camera2.std": 0.2698094844818115,
+      "observation.images.camera2.min": 0.0,
+      "observation.images.camera2.max": 0.9882352948188782,
+      "state_head_normalized": [
+        -0.7453740239143372,
+        -0.8714536428451538,
+        -1.4261401891708374,
+        -0.9785341024398804,
+        -0.5423646569252014,
+        -0.11825903505086899,
+        -0.4531420171260834,
+        1.3636784553527832,
+        1.3642706871032715
+      ],
+      "action_head": [
+        -0.07620152831077576,
+        -0.09158871322870255,
+        -0.3419272303581238,
+        -2.6958746910095215,
+        0.012544341385364532,
+        2.605968713760376,
+        0.2944119870662689,
+        0.9797570705413818
+      ],
+      "observation.images.camera1.mean_train_percentile": 0.0033333333333333335,
+      "observation.images.camera2.mean_train_percentile": 0.995
+    },
+    {
+      "step": 57,
+      "observation.images.camera1.mean": 0.7205519676208496,
+      "observation.images.camera1.std": 0.2584931254386902,
+      "observation.images.camera1.min": 0.0,
+      "observation.images.camera1.max": 1.0,
+      "observation.images.camera2.mean": 0.5961052775382996,
+      "observation.images.camera2.std": 0.26957863569259644,
+      "observation.images.camera2.min": 0.0,
+      "observation.images.camera2.max": 0.9843137264251709,
+      "state_head_normalized": [
+        -0.8088229298591614,
+        0.38666805624961853,
+        -1.1870157718658447,
+        -0.9634655714035034,
+        0.7657472491264343,
+        0.8704526424407959,
+        -0.9827902317047119,
+        1.3636784553527832,
+        1.364297866821289
+      ],
+      "action_head": [
+        -0.11714056134223938,
+        0.21133661270141602,
+        -0.242787167429924,
+        -2.6690785884857178,
+        0.32617849111557007,
+        2.8507285118103027,
+        -0.0020263195037841797,
+        0.9615687131881714
+      ],
+      "observation.images.camera1.mean_train_percentile": 0.0033333333333333335,
+      "observation.images.camera2.mean_train_percentile": 0.995
+    },
+    {
+      "step": 60,
+      "observation.images.camera1.mean": 0.7205845713615417,
+      "observation.images.camera1.std": 0.2584781348705292,
+      "observation.images.camera1.min": 0.0,
+      "observation.images.camera1.max": 1.0,
+      "observation.images.camera2.mean": 0.5960437059402466,
+      "observation.images.camera2.std": 0.2695668637752533,
+      "observation.images.camera2.min": 0.0,
+      "observation.images.camera2.max": 0.9882352948188782,
+      "state_head_normalized": [
+        -0.8882625699043274,
+        0.5999118089675903,
+        -1.0137697458267212,
+        -0.9267138242721558,
+        0.9719374179840088,
+        0.9952161312103271,
+        -1.1024168729782104,
+        -0.794146716594696,
+        -0.8812926411628723
+      ],
+      "action_head": [
+        -0.10503490269184113,
+        0.2091071605682373,
+        -0.2546987533569336,
+        -2.6709249019622803,
+        0.3062955439090729,
+        2.8455910682678223,
+        0.034172117710113525,
+        -1.0162359476089478
+      ],
+      "observation.images.camera1.mean_train_percentile": 0.0033333333333333335,
+      "observation.images.camera2.mean_train_percentile": 0.995
+    },
+    {
+      "step": 80,
+      "observation.images.camera1.mean": 0.720505952835083,
+      "observation.images.camera1.std": 0.25864097476005554,
+      "observation.images.camera1.min": 0.0,
+      "observation.images.camera1.max": 1.0,
+      "observation.images.camera2.mean": 0.5961006879806519,
+      "observation.images.camera2.std": 0.26937833428382874,
+      "observation.images.camera2.min": 0.0,
+      "observation.images.camera2.max": 0.9843137264251709,
+      "state_head_normalized": [
+        -0.15852805972099304,
+        -0.6467416286468506,
+        -0.48072659969329834,
+        -0.4700823128223419,
+        -0.42436614632606506,
+        0.04682070389389992,
+        0.8532158136367798,
+        -2.8326637744903564,
+        -3.002974271774292
+      ],
+      "action_head": [
+        0.031046956777572632,
+        -0.11934729665517807,
+        -0.14538796246051788,
+        -2.559821605682373,
+        -0.010305441915988922,
+        2.5416195392608643,
+        1.0268664360046387,
+        -1.0081417560577393
+      ],
+      "observation.images.camera1.mean_train_percentile": 0.0033333333333333335,
+      "observation.images.camera2.mean_train_percentile": 0.995
+    },
+    {
+      "step": 120,
+      "observation.images.camera1.mean": 0.7204896807670593,
+      "observation.images.camera1.std": 0.2585323750972748,
+      "observation.images.camera1.min": 0.0,
+      "observation.images.camera1.max": 1.0,
+      "observation.images.camera2.mean": 0.5961559414863586,
+      "observation.images.camera2.std": 0.2694394290447235,
+      "observation.images.camera2.min": 0.0,
+      "observation.images.camera2.max": 0.9921568632125854,
+      "state_head_normalized": [
+        0.25617554783821106,
+        -0.4507872760295868,
+        0.6879199147224426,
+        0.10186589509248734,
+        -0.6015819907188416,
+        -0.4593154489994049,
+        1.1461937427520752,
+        -2.832624673843384,
+        -3.003325939178467
+      ],
+      "action_head": [
+        0.06739024072885513,
+        -0.04230725020170212,
+        -0.022457823157310486,
+        -2.4708683490753174,
+        -0.02607085555791855,
+        2.476254940032959,
+        1.040635108947754,
+        -1.0160696506500244
+      ],
+      "observation.images.camera1.mean_train_percentile": 0.0033333333333333335,
+      "observation.images.camera2.mean_train_percentile": 0.995
+    }
+  ]
+}

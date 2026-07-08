@@ -1,0 +1,85 @@
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@
+     parser.add_argument("--trajectory-log", type=str, default="", help="Optional JSONL control telemetry path.")
++    parser.add_argument(
++        "--fixed-cube-pose",
++        type=str,
++        default="",
++        help=(
++            "Optional diagnostic override applied after reset: 'x,y,z' or "
++            "'x,y,z,qw,qx,qy,qz' in env-relative coordinates. Disabled by default."
++        ),
++    )
+@@
+         send_gripper_torque_window: bool = False,
+         torque_window_size: int = 30,
+         trajectory_log: str = "",
++        fixed_cube_pose: str = "",
+     ):
+@@
+         self._trajectory_handle = None
++        self.fixed_cube_pose = self._parse_fixed_cube_pose(fixed_cube_pose)
+@@
+         self._setup_env()
++
++    def _parse_fixed_cube_pose(self, spec: str) -> torch.Tensor | None:
++        if not spec:
++            return None
++        values = [float(x.strip()) for x in spec.split(",") if x.strip()]
++        if len(values) == 3:
++            values = values + [1.0, 0.0, 0.0, 0.0]
++        if len(values) != 7:
++            raise ValueError(
++                "--fixed-cube-pose must contain x,y,z or x,y,z,qw,qx,qy,qz, "
++                f"got {len(values)} values from {spec!r}"
++            )
++        logger.info("Fixed cube pose diagnostic enabled: %s", values)
++        return torch.tensor(values, dtype=torch.float32, device=self.device).unsqueeze(0)
+@@
+         if seed is not None:
+             self.env.reset(seed=seed)
+         else:
+             self.env.reset()
++
++        self._apply_fixed_cube_pose_if_needed()
+@@
+         observation = self._extract_observation()
+         self._write_trajectory({"event": "reset", **self._scene_snapshot()})
+         return observation
++
++    def _apply_fixed_cube_pose_if_needed(self) -> None:
++        if self.fixed_cube_pose is None:
++            return
++        cube = self.env.scene["cube"]
++        env_origin = self.env.scene.env_origins[0].to(self.device)
++        pose_w = self.fixed_cube_pose.clone()
++        pose_w[:, :3] += env_origin.unsqueeze(0)
++        cube.write_root_pose_to_sim(pose_w)
++        cube.write_root_velocity_to_sim(torch.zeros((1, 6), dtype=torch.float32, device=self.device))
++        self.env.sim.forward()
++        self._write_trajectory(
++            {
++                "event": "diagnostic_fixed_cube_pose_applied",
++                "episode": self._episode_index,
++                "seed": self._episode_seed,
++                "fixed_cube_pose_env": self.fixed_cube_pose[0].detach().cpu().numpy().astype(np.float32).tolist(),
++            }
++        )
+@@
+         send_gripper_torque_window=args_cli.send_gripper_torque_window,
+         torque_window_size=args_cli.torque_window_size,
+         trajectory_log=args_cli.trajectory_log,
++        fixed_cube_pose=args_cli.fixed_cube_pose,
+     )
+diff --git a/experiment/run_eval_server.sh b/experiment/run_eval_server.sh
+--- a/experiment/run_eval_server.sh
++++ b/experiment/run_eval_server.sh
+@@
+   --enable_cameras --headless \
+   --experience=isaacsim_4_5/isaaclab.python.headless.rendering.kit \
+   --kit_args=--/app/useFabricSceneDelegate=0 \
+   ${TRAJECTORY_LOG:+--trajectory-log="$TRAJECTORY_LOG"} \
++  ${FIXED_CUBE_POSE:+--fixed-cube-pose="$FIXED_CUBE_POSE"} \
+   "${EXTRA[@]}"
