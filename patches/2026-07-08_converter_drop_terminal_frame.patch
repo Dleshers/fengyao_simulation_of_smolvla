@@ -1,0 +1,36 @@
+diff --git a/IsaacLab-Tactile/lerobot/convert_pick_place_basket_joint_tacex.py b/IsaacLab-Tactile/lerobot/convert_pick_place_basket_joint_tacex.py
+--- a/IsaacLab-Tactile/lerobot/convert_pick_place_basket_joint_tacex.py
++++ b/IsaacLab-Tactile/lerobot/convert_pick_place_basket_joint_tacex.py
+@@
+     parser.add_argument("--robot-type", type=str, default="isaaclab_tactile", help="Robot type identifier")
+     parser.add_argument("--torque-window-size", type=int, default=30, help="Causal gripper-torque window")
+     parser.add_argument("--use-videos", action="store_true", help="Store images as videos")
++    parser.add_argument(
++        "--drop-terminal-frame",
++        action="store_true",
++        help=(
++            "Drop the final frame from every HDF5 demo. This avoids training on terminal frames "
++            "whose action label may be overwritten by Isaac auto-reset joint targets."
++        ),
++    )
+     return parser.parse_args()
+@@
+-            T = int(actions.shape[0])
++            T_raw = int(actions.shape[0])
++            T = T_raw - 1 if args.drop_terminal_frame else T_raw
++            if T <= 0:
++                raise ValueError(f"Demo '{demo_name}' has no frames left after drop-terminal-frame={args.drop_terminal_frame}")
+             for required in ("joint_pos", "gripper_pos", "gripper_torque", "rgb_table", "rgb_wrist"):
+-                if len(demo[required]) != T:
++                if len(demo[required]) != T_raw:
+                     raise ValueError(
+-                        f"Demo '{demo_name}' length mismatch: actions={T}, {required}={len(demo[required])}"
++                        f"Demo '{demo_name}' length mismatch: actions={T_raw}, {required}={len(demo[required])}"
+                     )
+-            torque_values = np.asarray(demo["gripper_torque"], dtype=np.float32).reshape(T, 1)
++            torque_values = np.asarray(demo["gripper_torque"], dtype=np.float32).reshape(T_raw, 1)
+             if not np.isfinite(torque_values).all():
+                 raise ValueError(f"Demo '{demo_name}' gripper_torque contains NaN or Inf")
+-            print(f"  [{idx}/{len(demos)}] {demo_name}: {T} steps", end="\r")
++            suffix = f" ({T_raw - T} terminal frame dropped)" if args.drop_terminal_frame else ""
++            print(f"  [{idx}/{len(demos)}] {demo_name}: {T} steps{suffix}", end="\r")
