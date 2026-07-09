@@ -34,8 +34,16 @@ Run a gated/zero-init torque-LSTM 5k continuation:
 - dataset: targeted5 clean;
 - frozen torque encoder;
 - torque adapter zero-initialized;
-- scalar torque gate initialized to `0.0`;
+- scalar torque gate initialized to `1.0`;
 - same eval seeds as previous runs.
+
+Important correction: a first gate-0 smoke run showed that setting both the
+adapter and scalar gate to exactly zero creates a dead torque branch.  The final
+checkpoint kept `model.torque_gate`, `model.torque_to_expert.weight`, and
+`model.torque_to_expert.bias` all at zero.  Therefore the meaningful gated
+ablation uses zero-init adapter with a nonzero scalar gate.  This still starts
+with zero torque perturbation, because the adapter output is zero, but the
+adapter receives gradients immediately.
 
 Expected interpretation:
 

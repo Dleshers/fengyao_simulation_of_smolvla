@@ -2,10 +2,13 @@
 set -euo pipefail
 
 # Conservative torque-LSTM continuation from the successful targeted5 visual
-# 50k checkpoint.  The torque adapter is zero-initialized and multiplied by a
-# learnable scalar gate initialized to zero, so the initial policy is
-# functionally close to the visual baseline instead of receiving a random
-# torque suffix token.
+# 50k checkpoint.  The torque adapter is zero-initialized, so the initial
+# torque token is exactly zero and the initial policy is functionally close to
+# the visual baseline instead of receiving a random torque suffix token.
+#
+# Keep the scalar gate nonzero (default: 1.0).  If both the adapter and gate are
+# initialized to zero, the torque branch is dead: neither the gate nor adapter
+# receives a useful gradient at the first step.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_ROOT="${RUNTIME_ROOT:-$REPO_ROOT/_runtime/remote_handoff_gripper_lstm_work}"
@@ -18,7 +21,7 @@ PRETRAINED_POLICY="${PRETRAINED_POLICY:-$RUNTIME_ROOT/persistent/gripper_lstm_ex
 TORQUE_LSTM_WEIGHTS="${TORQUE_LSTM_WEIGHTS:-$REPO_ROOT/trained_lstm_weights/torque_16d_encoder.pt}"
 
 OUTPUT_ROOT="${OUTPUT_ROOT:-$RUNTIME_ROOT/persistent/gripper_lstm_experiments}"
-RUN_NAME="${RUN_NAME:-targeted5_visual50k_plus_gated_torque_lstm_5k_seed1000_20260709}"
+RUN_NAME="${RUN_NAME:-targeted5_visual50k_plus_gated_torque_lstm_gate1_5k_seed1000_20260709}"
 OUTPUT_DIR="${OUTPUT_DIR:-$OUTPUT_ROOT/$RUN_NAME}"
 
 SEED="${SEED:-1000}"
@@ -27,7 +30,7 @@ STEPS="${STEPS:-5000}"
 SAVE_FREQ="${SAVE_FREQ:-1000}"
 LOG_FREQ="${LOG_FREQ:-100}"
 NUM_WORKERS="${NUM_WORKERS:-0}"
-TORQUE_GATE_INIT="${TORQUE_GATE_INIT:-0.0}"
+TORQUE_GATE_INIT="${TORQUE_GATE_INIT:-1.0}"
 
 TMP_BASE="${TMP_BASE:-/tmp/svl}"
 mkdir -p "$TMP_BASE" "$RUNTIME_ROOT/persistent/logs"
