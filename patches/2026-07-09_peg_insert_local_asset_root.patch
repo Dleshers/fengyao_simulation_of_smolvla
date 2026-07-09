@@ -1,0 +1,67 @@
+*** Begin Patch
+*** Update File: _runtime/remote_handoff_gripper_lstm_work/IsaacLab-Tactile/source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/peg_insert/peg_insert_env_cfg.py
+@@
+-from dataclasses import MISSING
++from dataclasses import MISSING
++import os
+@@
+ from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg
+ from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
++from isaaclab.sim.spawners.materials import PreviewSurfaceCfg
++from isaaclab.sim.spawners.shapes import CuboidCfg
+ from isaaclab.utils import configclass
+@@
+ from . import mdp
++
++
++_LOCAL_ISAAC_4_5_ASSET_ROOT = os.environ.get("LOCAL_ISAAC_4_5_ASSET_ROOT")
++_PEG_INSERT_SIMPLE_TABLE = os.environ.get("PEG_INSERT_SIMPLE_TABLE", "0") == "1"
++
++
++def _asset_path(remote_path: str) -> str:
++    """Resolve an Isaac 4.5 asset path.
++
++    If LOCAL_ISAAC_4_5_ASSET_ROOT is set, map URLs under the Isaac 4.5 asset
++    root to a local mirror. Otherwise preserve the original Nucleus/S3 path.
++    """
++    if _LOCAL_ISAAC_4_5_ASSET_ROOT:
++        marker = "/Assets/Isaac/4.5/"
++        if marker in remote_path:
++            rel = remote_path.split(marker, 1)[1]
++        else:
++            rel = remote_path.split("/Isaac/", 1)[-1]
++            rel = f"Isaac/{rel}" if not rel.startswith("Isaac/") else rel
++        return os.path.join(_LOCAL_ISAAC_4_5_ASSET_ROOT, rel)
++    return remote_path
+@@
+-            usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Factory/factory_peg_8mm.usd",
++            usd_path=_asset_path(f"{ISAACLAB_NUCLEUS_DIR}/Factory/factory_peg_8mm.usd"),
+@@
+-            usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Factory/factory_hole_8mm.usd",
++            usd_path=_asset_path(f"{ISAACLAB_NUCLEUS_DIR}/Factory/factory_hole_8mm.usd"),
+@@
+-    # Table
+-    table = AssetBaseCfg(
+-        prim_path="{ENV_REGEX_NS}/Table",
+-        init_state=AssetBaseCfg.InitialStateCfg(pos=[0.5, 0, 0], rot=[0.707, 0, 0, 0.707]),
+-        spawn=UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd"),
+-    )
++    if _PEG_INSERT_SIMPLE_TABLE:
++        table = AssetBaseCfg(
++            prim_path="{ENV_REGEX_NS}/Table",
++            init_state=AssetBaseCfg.InitialStateCfg(pos=[0.5, 0.0, -0.025], rot=[1.0, 0.0, 0.0, 0.0]),
++            spawn=CuboidCfg(
++                size=(1.2, 0.8, 0.05),
++                collision_props=sim_utils.CollisionPropertiesCfg(),
++                visual_material=PreviewSurfaceCfg(diffuse_color=(0.45, 0.45, 0.45)),
++            ),
++        )
++    else:
++        table = AssetBaseCfg(
++            prim_path="{ENV_REGEX_NS}/Table",
++            init_state=AssetBaseCfg.InitialStateCfg(pos=[0.5, 0, 0], rot=[0.707, 0, 0, 0.707]),
++            spawn=UsdFileCfg(
++                usd_path=_asset_path(f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd")
++            ),
++        )
+*** End Patch

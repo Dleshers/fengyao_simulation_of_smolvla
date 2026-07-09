@@ -265,6 +265,141 @@ ENABLE_CAMERAS=0 TIMEOUT_SECONDS=420 NUM_STEPS=1 bash experiment/peg_insert_env_
 ENABLE_CAMERAS=1 TIMEOUT_SECONDS=420 NUM_STEPS=1 bash experiment/peg_insert_env_smoke.sh
 ```
 
+## Asset restoration details
+
+The three core URLs were probed with HTTP HEAD and returned `200 OK`:
+
+```text
+http://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/4.5/Isaac/IsaacLab/Factory/factory_peg_8mm.usd
+  Content-Length: 1690754
+  ETag: c766c906dc1a70cb7e8a6f0a9457a354
+
+http://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/4.5/Isaac/IsaacLab/Factory/factory_hole_8mm.usd
+  Content-Length: 7508864
+  ETag: 721aa0238f093b07070cc459ad18dc6a
+
+http://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/4.5/Isaac/Props/Mounts/SeattleLabTable/table_instanceable.usd
+  Content-Length: 4584
+  ETag: cc5384821e87bdcd44cf20fb461a5363
+```
+
+A helper script has been prepared:
+
+```bash
+bash experiment/restore_peg_insert_assets.sh
+```
+
+It restores these files to:
+
+```text
+_runtime/remote_handoff_gripper_lstm_work/persistent/assets/isaac_4_5_mirror
+```
+
+The accompanying patch:
+
+```text
+patches/2026-07-09_peg_insert_local_asset_root.patch
+```
+
+adds support for:
+
+```bash
+LOCAL_ISAAC_4_5_ASSET_ROOT=_runtime/remote_handoff_gripper_lstm_work/persistent/assets/isaac_4_5_mirror
+```
+
+so the peg-insert config can use local USD assets instead of waiting on the remote Nucleus/S3 path during `gym.make`.
+
+Follow-up diagnostic after restoring the three core files:
+
+- `gym.make` still timed out, but the log revealed the concrete unresolved dependency:
+
+```text
+Could not open asset @table.usd@ for reference introduced by .../SeattleLabTable/table_instanceable.usd
+```
+
+- Therefore `table_instanceable.usd` is not standalone. The restore script now also downloads:
+
+```text
+Isaac/Props/Mounts/SeattleLabTable/table.usd
+```
+
+- A fallback was also added for setup/smoke runs:
+
+```bash
+PEG_INSERT_SIMPLE_TABLE=1
+```
+
+This replaces the SeattleLabTable USD with a local procedural cuboid table. The smoke and collection scripts default to this simple table so task registration, reset, and stepping can be validated without depending on the full table asset chain.
+
+## 2026-07-09 smoke resolution
+
+Further testing showed that there were two independent startup blockers:
+
+1. The SeattleLabTable USD was incomplete without `table.usd`.
+2. The peg-insert Franka config always created camera sensors and an `rgb_camera` observation group, even when the smoke script was run with `ENABLE_CAMERAS=0`.
+
+Additionally, the Factory peg/hole USD assets still caused slow/hanging `gym.make` behavior even after being wrapped as `RigidObjectCfg` with articulation root disabled.  For pipeline smoke testing, a procedural fallback was added:
+
+```bash
+PEG_INSERT_PROCEDURAL_ASSETS=1
+PEG_INSERT_SIMPLE_TABLE=1
+```
+
+This fallback uses:
+
+- procedural cylinder peg;
+- procedural cuboid target/hole placeholder;
+- procedural cuboid table.
+
+It is only for environment, camera, teleop, and data-pipeline validation.  It should not be used as the final high-fidelity insertion geometry for experimental conclusions.
+
+Successful no-camera smoke:
+
+```bash
+LOCAL_ISAAC_4_5_ASSET_ROOT="$PWD/_runtime/remote_handoff_gripper_lstm_work/persistent/assets/isaac_4_5_mirror" \
+ENABLE_CAMERAS=0 PEG_INSERT_DISABLE_CAMERAS=1 \
+PEG_INSERT_PROCEDURAL_ASSETS=1 PEG_INSERT_SIMPLE_TABLE=1 \
+TIMEOUT_SECONDS=180 DUMP_AFTER_S=60 NUM_STEPS=1 \
+bash experiment/peg_insert_env_smoke.sh
+```
+
+Observed:
+
+```text
+observation_space=Dict('policy': Box(-inf, inf, (1, 49), float32))
+action_space=Box(-inf, inf, (1, 7), float32)
+[PEG_PROBE] step=0 terminated=[False] truncated=[False]
+[PEG_PROBE] success
+```
+
+Successful camera-enabled smoke:
+
+```bash
+LOCAL_ISAAC_4_5_ASSET_ROOT="$PWD/_runtime/remote_handoff_gripper_lstm_work/persistent/assets/isaac_4_5_mirror" \
+ENABLE_CAMERAS=1 PEG_INSERT_DISABLE_CAMERAS=0 \
+PEG_INSERT_PROCEDURAL_ASSETS=1 PEG_INSERT_SIMPLE_TABLE=1 \
+TIMEOUT_SECONDS=240 DUMP_AFTER_S=90 NUM_STEPS=1 \
+bash experiment/peg_insert_env_smoke.sh
+```
+
+Observed:
+
+```text
+observation_space=Dict(
+  'policy': Box(-inf, inf, (1, 49), float32),
+  'rgb_camera': Dict('wrist_cam': Box(-inf, inf, (1, 84, 84, 3), float32))
+)
+action_space=Box(-inf, inf, (1, 7), float32)
+[PEG_PROBE] step=0 terminated=[False] truncated=[False]
+[PEG_PROBE] success
+```
+
+Current implication:
+
+- The manager-based peg-insert task framework can launch, reset, step, and render headlessly.
+- The immediate data-pipeline smoke can proceed using procedural fallback geometry.
+- Before formal tactile-benefit experiments, the Factory peg/hole USD hang should be resolved or replaced by a high-fidelity procedural/contact geometry that is explicitly documented.
+
 ## Stop conditions
 
 Stop before training if any of these fail:

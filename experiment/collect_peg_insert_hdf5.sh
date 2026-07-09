@@ -17,6 +17,8 @@ TELEOP_DEVICE="${TELEOP_DEVICE:-keyboard}"
 NUM_DEMOS="${NUM_DEMOS:-10}"
 STEP_HZ="${STEP_HZ:-20}"
 NUM_SUCCESS_STEPS="${NUM_SUCCESS_STEPS:-10}"
+PEG_INSERT_PROCEDURAL_ASSETS="${PEG_INSERT_PROCEDURAL_ASSETS:-1}"
+PEG_INSERT_SIMPLE_TABLE="${PEG_INSERT_SIMPLE_TABLE:-1}"
 OUT_DIR="${OUT_DIR:-$RUNTIME_ROOT/persistent/raw_hdf5/peg_insert_official_pretrain_smoke_$(date +%Y%m%d_%H%M%S)}"
 DATASET_FILE="${DATASET_FILE:-$OUT_DIR/peg_insert_demos.hdf5}"
 
@@ -27,6 +29,8 @@ export TMPDIR="${TMPDIR:-$TMP_BASE}"
 export TMP="${TMP:-$TMP_BASE}"
 export TEMP="${TEMP:-$TMP_BASE}"
 export OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}"
+export PEG_INSERT_PROCEDURAL_ASSETS
+export PEG_INSERT_SIMPLE_TABLE
 export TERM="${TERM:-xterm}"
 if [[ "$TERM" == "dumb" ]]; then
   export TERM=xterm

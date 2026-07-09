@@ -15,8 +15,12 @@ TASK="${TASK:-Isaac-Peg-Insert-Franka-IK-Rel-v0}"
 NUM_ENVS="${NUM_ENVS:-1}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-120}"
 NUM_STEPS="${NUM_STEPS:-16}"
+DUMP_AFTER_S="${DUMP_AFTER_S:-60}"
 DEVICE="${DEVICE:-cuda:0}"
 ENABLE_CAMERAS="${ENABLE_CAMERAS:-1}"
+PEG_INSERT_DISABLE_CAMERAS="${PEG_INSERT_DISABLE_CAMERAS:-$([[ "${ENABLE_CAMERAS:-1}" == "1" ]] && echo 0 || echo 1)}"
+PEG_INSERT_PROCEDURAL_ASSETS="${PEG_INSERT_PROCEDURAL_ASSETS:-1}"
+PEG_INSERT_SIMPLE_TABLE="${PEG_INSERT_SIMPLE_TABLE:-1}"
 
 TMP_BASE="${TMP_BASE:-/tmp/svl}"
 mkdir -p "$TMP_BASE" "$RUNTIME_ROOT/persistent/logs"
@@ -25,6 +29,9 @@ export TMPDIR="${TMPDIR:-$TMP_BASE}"
 export TMP="${TMP:-$TMP_BASE}"
 export TEMP="${TEMP:-$TMP_BASE}"
 export OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}"
+export PEG_INSERT_DISABLE_CAMERAS
+export PEG_INSERT_PROCEDURAL_ASSETS
+export PEG_INSERT_SIMPLE_TABLE
 export TERM="${TERM:-xterm}"
 if [[ "$TERM" == "dumb" ]]; then
   export TERM=xterm
@@ -42,7 +49,11 @@ echo "Peg-insert Isaac headless smoke"
 echo "  task:     $TASK"
 echo "  num_envs: $NUM_ENVS"
 echo "  steps:    $NUM_STEPS"
+echo "  dump_s:   $DUMP_AFTER_S"
 echo "  cameras:  $ENABLE_CAMERAS"
+echo "  cam_cfg:  $([[ "$PEG_INSERT_DISABLE_CAMERAS" == "1" ]] && echo disabled || echo enabled)"
+echo "  assets:   $([[ "$PEG_INSERT_PROCEDURAL_ASSETS" == "1" ]] && echo procedural || echo usd)"
+echo "  table:    $([[ "$PEG_INSERT_SIMPLE_TABLE" == "1" ]] && echo simple || echo usd)"
 echo "  seconds:  $TIMEOUT_SECONDS"
 echo "  device:   $DEVICE"
 echo "  TMPDIR:   $TMPDIR"
@@ -54,6 +65,7 @@ cmd=(
   --task "$TASK"
   --num_envs "$NUM_ENVS"
   --num_steps "$NUM_STEPS"
+  --dump_after_s "$DUMP_AFTER_S"
   --device "$DEVICE"
   --headless
   --experience=isaacsim_4_5/isaaclab.python.headless.rendering.kit

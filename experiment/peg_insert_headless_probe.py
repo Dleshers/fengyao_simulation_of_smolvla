@@ -10,6 +10,8 @@ action steps, and exits.
 from __future__ import annotations
 
 import argparse
+import faulthandler
+import sys
 
 from isaaclab.app import AppLauncher
 
@@ -18,8 +20,13 @@ parser = argparse.ArgumentParser(description="Finite peg-insert headless probe."
 parser.add_argument("--task", type=str, default="Isaac-Peg-Insert-Franka-IK-Rel-v0")
 parser.add_argument("--num_envs", type=int, default=1)
 parser.add_argument("--num_steps", type=int, default=16)
+parser.add_argument("--dump_after_s", type=int, default=60)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+
+faulthandler.enable(file=sys.stderr, all_threads=True)
+if args_cli.dump_after_s > 0:
+    faulthandler.dump_traceback_later(args_cli.dump_after_s, repeat=True, file=sys.stderr)
 
 print("[PEG_PROBE] launching_app", flush=True)
 app_launcher = AppLauncher(args_cli)
@@ -71,4 +78,5 @@ if __name__ == "__main__":
     try:
         main()
     finally:
+        faulthandler.cancel_dump_traceback_later()
         simulation_app.close()
