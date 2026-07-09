@@ -1,0 +1,4 @@
+run,pc_success,successes,failed_episodes
+visual50k,80.0,TTFTTTFTTT,2;6
+visual50k_plus_visualonly5k,80.0,TTFTTTFTTT,2;6
+visual50k_plus_torque5k,70.0,TTFTTTFFTT,2;6;7

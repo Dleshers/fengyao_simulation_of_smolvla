@@ -1,0 +1,33 @@
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@
+-        if env_done and "success" in termination_terms:
+-            is_success = termination_terms["success"]
+-        else:
+-            is_success = self._check_success()
++        if env_done and "success" in termination_terms:
++            is_success = termination_terms["success"]
++            success_source = "termination_manager"
++        else:
++            is_success = self._check_success()
++            success_source = "geometry_check"
++        termination_success = termination_terms.get("success")
++        success_term_disagrees = termination_success is not None and bool(termination_success) != bool(is_success)
+@@
+-            "is_success": is_success, "termination_terms": termination_terms,
++            "is_success": is_success, "success_source": success_source,
++            "termination_terms": termination_terms,
++            "success_term_disagrees_with_reported": bool(success_term_disagrees),
+             "env_step_done": bool(env_done),
+             "hit_max_steps": bool(hit_max_steps),
+             "post_step_scene_was_auto_reset": bool(env_done),
+@@
+             "step": self._step_count,
+             "is_success": is_success,
++            "success_source": success_source,
+             "termination_terms": termination_terms,
++            "success_term_disagrees_with_reported": bool(success_term_disagrees),
+             "env_step_done": bool(env_done),
+             "hit_max_steps": bool(hit_max_steps),
+         }

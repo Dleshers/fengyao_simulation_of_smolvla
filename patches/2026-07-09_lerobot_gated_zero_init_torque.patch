@@ -1,0 +1,47 @@
+diff --git a/src/lerobot/policies/smolvla/configuration_smolvla.py b/src/lerobot/policies/smolvla/configuration_smolvla.py
+--- a/src/lerobot/policies/smolvla/configuration_smolvla.py
++++ b/src/lerobot/policies/smolvla/configuration_smolvla.py
+@@
+     # The external encoder is frozen by default; the suffix projection remains trainable.
+     train_torque_lstm: bool = False
++    # Conservative torque injection controls.  Keeping both defaults disabled
++    # preserves compatibility with earlier torque-LSTM checkpoints.  For
++    # continuation fine-tuning from a strong visual policy, enable both
++    # zero-init and a zero/small gate so the initial policy is functionally
++    # close to the visual baseline instead of receiving a random torque token.
++    torque_zero_init_adapter: bool = False
++    torque_gate_init: float | None = None
+ 
+     # Compatibility fields retained by checkpoints from the source machine.
+diff --git a/src/lerobot/policies/smolvla/modeling_smolvla.py b/src/lerobot/policies/smolvla/modeling_smolvla.py
+--- a/src/lerobot/policies/smolvla/modeling_smolvla.py
++++ b/src/lerobot/policies/smolvla/modeling_smolvla.py
+@@
+         self.torque_lstm = None
+         self.torque_norm = None
+         self.torque_to_expert = None
++        self.torque_gate = None
+         if self.config.use_torque_lstm:
+             self.torque_lstm = ForceLSTMEncoder(
+                 input_dim=self.config.torque_input_dim,
+                 hidden_dim=self.config.torque_lstm_hidden_dim,
+                 output_dim=self.config.torque_lstm_output_dim,
+@@
+             self.torque_norm = nn.LayerNorm(self.config.torque_lstm_output_dim)
+             self.torque_to_expert = nn.Linear(
+                 self.config.torque_lstm_output_dim, self.vlm_with_expert.expert_hidden_size
+             )
++            if self.config.torque_zero_init_adapter:
++                nn.init.zeros_(self.torque_to_expert.weight)
++                nn.init.zeros_(self.torque_to_expert.bias)
++            if self.config.torque_gate_init is not None:
++                self.torque_gate = nn.Parameter(
++                    torch.tensor(float(self.config.torque_gate_init), dtype=torch.float32)
++                )
+@@
+         latent = self.torque_lstm(torque_window)
+-        return self.torque_to_expert(self.torque_norm(latent)).unsqueeze(1)
++        torque_token = self.torque_to_expert(self.torque_norm(latent))
++        if self.torque_gate is not None:
++            torque_token = torque_token * self.torque_gate.to(device=torque_token.device, dtype=torque_token.dtype)
++        return torque_token.unsqueeze(1)
