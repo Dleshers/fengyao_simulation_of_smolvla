@@ -1,0 +1,31 @@
+*** Begin Patch
+*** Update File: _runtime/remote_handoff_gripper_lstm_work/IsaacLab-Tactile/source/isaaclab_assets/isaaclab_assets/robots/franka.py
+@@
+-import isaaclab.sim as sim_utils
++import os
++
++import isaaclab.sim as sim_utils
+@@
+ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
++
++
++_LOCAL_ISAAC_4_5_ASSET_ROOT = os.environ.get("LOCAL_ISAAC_4_5_ASSET_ROOT")
++
++
++def _asset_path(remote_path: str) -> str:
++    if _LOCAL_ISAAC_4_5_ASSET_ROOT:
++        marker = "/Assets/Isaac/4.5/"
++        if marker in remote_path:
++            rel = remote_path.split(marker, 1)[1]
++        else:
++            rel = remote_path.split("/Isaac/", 1)[-1]
++            rel = f"Isaac/{rel}" if not rel.startswith("Isaac/") else rel
++        return os.path.join(_LOCAL_ISAAC_4_5_ASSET_ROOT, rel)
++    return remote_path
+@@
+-        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/FrankaEmika/panda_instanceable.usd",
++        usd_path=_asset_path(f"{ISAACLAB_NUCLEUS_DIR}/Robots/FrankaEmika/panda_instanceable.usd"),
+@@
+-FRANKA_ROBOTIQ_GRIPPER_CFG.spawn.usd_path = f"{ISAAC_NUCLEUS_DIR}/Robots/FrankaRobotics/FrankaPanda/franka.usd"
++FRANKA_ROBOTIQ_GRIPPER_CFG.spawn.usd_path = _asset_path(f"{ISAAC_NUCLEUS_DIR}/Robots/FrankaRobotics/FrankaPanda/franka.usd")
+*** End Patch

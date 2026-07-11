@@ -64,4 +64,17 @@
 +                usd_path=_asset_path(f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd")
 +            ),
 +        )
+@@
+     class RGBCameraPolicyCfg(ObsGroup):
+         """Image observations group (not concatenated)."""
+
++        table_cam = ObsTerm(
++            func=mdp.image,
++            params={"sensor_cfg": SceneEntityCfg("table_cam"), "data_type": "rgb", "normalize": False},
++        )
++
+         wrist_cam = ObsTerm(
+             func=mdp.image,
+             params={"sensor_cfg": SceneEntityCfg("wrist_cam"), "data_type": "rgb", "normalize": False},
+         )
 *** End Patch

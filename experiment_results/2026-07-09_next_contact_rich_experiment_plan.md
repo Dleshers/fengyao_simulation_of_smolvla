@@ -338,7 +338,7 @@ Further testing showed that there were two independent startup blockers:
 1. The SeattleLabTable USD was incomplete without `table.usd`.
 2. The peg-insert Franka config always created camera sensors and an `rgb_camera` observation group, even when the smoke script was run with `ENABLE_CAMERAS=0`.
 
-Additionally, the Factory peg/hole USD assets still caused slow/hanging `gym.make` behavior even after being wrapped as `RigidObjectCfg` with articulation root disabled.  For pipeline smoke testing, a procedural fallback was added:
+For pipeline smoke testing, a procedural fallback was added:
 
 ```bash
 PEG_INSERT_PROCEDURAL_ASSETS=1
@@ -351,7 +351,7 @@ This fallback uses:
 - procedural cuboid target/hole placeholder;
 - procedural cuboid table.
 
-It is only for environment, camera, teleop, and data-pipeline validation.  It should not be used as the final high-fidelity insertion geometry for experimental conclusions.
+It is useful for environment, camera, teleop, and data-pipeline validation when the external USD asset mirror is incomplete.  It should not be used as the final high-fidelity insertion geometry for experimental conclusions unless the geometry and contact semantics are explicitly accepted.
 
 Successful no-camera smoke:
 
@@ -398,7 +398,74 @@ Current implication:
 
 - The manager-based peg-insert task framework can launch, reset, step, and render headlessly.
 - The immediate data-pipeline smoke can proceed using procedural fallback geometry.
-- Before formal tactile-benefit experiments, the Factory peg/hole USD hang should be resolved or replaced by a high-fidelity procedural/contact geometry that is explicitly documented.
+- At this checkpoint, the Factory peg/hole USDs no longer appear to be the blocker once the local asset root and table dependency chain are handled.
+- The peg-insert task schema is not drop-in compatible with the earlier pick-place dataset/model path:
+  - action is 7D (`arm_action` 6 + `gripper_action` 1), not the pick-place 8D action;
+  - policy observation is 49D, not the pick-place 9D state;
+  - current visual observation is one wrist RGB camera at 84x84, not the previous two 224x224 cameras.
+
+## 2026-07-09 extended smoke and asset-closure tests
+
+The smoke probe was extended to print compact tensor statistics and to support small diagnostic action modes:
+
+```bash
+ACTION_MODE=zero|small_constant|random
+ACTION_SCALE=0.01
+```
+
+This lets us distinguish “environment can step” from “action commands actually affect robot state.”
+
+Test matrix completed:
+
+| Geometry/table mode | Cameras | Steps | Action | Result |
+| --- | --- | ---: | --- | --- |
+| procedural peg/hole + simple table | off | 100 | small_constant, scale 0.01 | pass |
+| procedural peg/hole + simple table | on | 50 | small_constant, scale 0.005 | pass |
+| Factory USD peg/hole + simple table | off | 1 | zero | pass |
+| Factory USD peg/hole + simple table | on | 50 | small_constant, scale 0.005 | pass |
+| Factory USD peg/hole + SeattleLabTable USD | on | 50 | small_constant, scale 0.005 | pass after restoring table textures |
+
+Most important observed values from the final full-USD camera smoke:
+
+```text
+observation_space=Dict(
+  'policy': Box(-inf, inf, (1, 49), float32),
+  'rgb_camera': Dict('wrist_cam': Box(-inf, inf, (1, 84, 84, 3), float32))
+)
+action_space=Box(-inf, inf, (1, 7), float32)
+reset_obs.policy: shape=(1, 49) dtype=torch.float32 finite=49/49
+reset_obs.rgb_camera.wrist_cam: shape=(1, 84, 84, 3) dtype=torch.uint8 finite=21168/21168 min=0 max=245
+delta_eef_pos=[[0.0233376622, 0.0000146539, 0.0118715167]]
+[PEG_PROBE] success
+```
+
+Interpretation:
+
+- Isaac headless/Vulkan startup is working on the RTX 3060.
+- Camera rendering is live: RGB is non-empty, finite, and changes across steps.
+- The action path is live: a small positive IK-relative action produced about `+2.33 cm` x movement and `+1.19 cm` z movement over 50 steps.
+- The earlier “finite probe timed out” was not caused by a generally broken Isaac runtime.  The concrete issues found were incomplete table assets and unconditional camera creation when cameras were intended to be disabled.
+
+Additional restored assets:
+
+```text
+Isaac/Props/Mounts/SeattleLabTable/table.usd
+Isaac/Props/Mounts/SeattleLabTable/Materials/Textures/DemoTable_TableBase_BaseColor.png
+Isaac/Props/Mounts/SeattleLabTable/Materials/Textures/DemoTable_TableBase_Metallic.png
+Isaac/Props/Mounts/SeattleLabTable/Materials/Textures/DemoTable_TableBase_Normal.png
+Isaac/Props/Mounts/SeattleLabTable/Materials/Textures/DemoTable_TableBase_Roughness.png
+Isaac/Props/Mounts/SeattleLabTable/Materials/Textures/DemoTable_TableParts_BaseColor.png
+Isaac/Props/Mounts/SeattleLabTable/Materials/Textures/DemoTable_TableParts_Metallic.png
+Isaac/Props/Mounts/SeattleLabTable/Materials/Textures/DemoTable_TableParts_Normal.png
+Isaac/Props/Mounts/SeattleLabTable/Materials/Textures/DemoTable_TableParts_Roughness.png
+```
+
+Remaining non-fatal warnings:
+
+- Isaac Sim 4.5 compatibility warnings for thread-local stage context.
+- Franka spatial-tendon compatibility patch warning.
+- `PhysicsUSD: CreateJoint - found a joint with disjointed body transforms` on the Factory hole fixed joint.  This did not prevent reset/step/render, but should be rechecked before drawing contact-quality conclusions.
+- DLSS warning because the wrist camera is only 84x84.
 
 ## Stop conditions
 
@@ -413,14 +480,15 @@ Stop before training if any of these fail:
 
 ## Next concrete command
 
-First restore the official checkpoint:
+After restoring the official SmolVLA checkpoint, the next safe verification command is a schema/data-pipeline dry run, not training.  First keep the peg-insert runtime smoke reproducible with:
 
 ```bash
-bash experiment/download_official_smolvla_base.sh
-```
-
-Then run:
-
-```bash
+LOCAL_ISAAC_4_5_ASSET_ROOT="$PWD/_runtime/remote_handoff_gripper_lstm_work/persistent/assets/isaac_4_5_mirror" \
+ENABLE_CAMERAS=1 PEG_INSERT_DISABLE_CAMERAS=0 \
+PEG_INSERT_PROCEDURAL_ASSETS=0 PEG_INSERT_SIMPLE_TABLE=0 \
+TIMEOUT_SECONDS=300 DUMP_AFTER_S=150 NUM_STEPS=50 \
+ACTION_MODE=small_constant ACTION_SCALE=0.005 \
 bash experiment/peg_insert_env_smoke.sh
 ```
+
+Then create a peg-insert-specific LeRobot schema/conversion audit.  Do not reuse the pick-place converter without explicitly mapping the 49D state, 7D action, 84x84 wrist camera, and torque/contact channel.
