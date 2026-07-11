@@ -56,6 +56,16 @@ Converted with `--state-mode compact21` and `--drop-terminal-frame`.
 | `Dleshers/peg-insert-torque-disambiguation-compact21-zero-v1` | zero | 45 | 1755 | same |
 | `Dleshers/peg-insert-torque-disambiguation-compact21-shuffleglobal-v1` | global shuffle | 45 | 1755 | same |
 
+Uploaded Hugging Face revisions:
+
+| Dataset | Revision |
+| --- | --- |
+| `Dleshers/peg-insert-torque-disambiguation-compact21-v1` | `dcfe4b38ceb6937f5cd13fa1c6f0da10450242a6` |
+| `Dleshers/peg-insert-torque-disambiguation-compact21-zero-v1` | `1d2212d6366932b62b4460ccbd6537fd52a792bf` |
+| `Dleshers/peg-insert-torque-disambiguation-compact21-shuffleglobal-v1` | `b7e83caef5ec0d6a3eb6926ffeffae441202e0db` |
+
+All three Hub repositories are private as of upload.
+
 Important converter update:
 
 ```text
