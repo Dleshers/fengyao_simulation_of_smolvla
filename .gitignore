@@ -3,3 +3,6 @@ datasets/
 pretrained/
 remote_workspace/.cache/
 __pycache__/
+*.bak_20260720_*
+*.bak_20260721_*
+patches/upload_fallback/

@@ -213,6 +213,22 @@ def main() -> None:
 
     print("[PEG_ORACLE] parse_env_cfg", flush=True)
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=1)
+    if args_cli.enable_cameras:
+        # The dataset only stores RGB. Avoid initializing unused depth annotators
+        # that are unreliable in the no-viewport AutoDL headless path.
+        for name in ("wrist_cam", "table_cam"):
+            sensor_cfg = getattr(env_cfg.scene, name, None)
+            if sensor_cfg is not None and hasattr(sensor_cfg, "data_types"):
+                sensor_cfg.data_types = ["rgb"]
+                print(f"[PEG_ORACLE] camera_rgb_only={name}", flush=True)
+    else:
+        for name in ("wrist_cam", "table_cam"):
+            if hasattr(env_cfg.scene, name):
+                setattr(env_cfg.scene, name, None)
+                print(f"[PEG_ORACLE] disabled_scene_sensor={name}", flush=True)
+        if hasattr(env_cfg.observations, "rgb_camera"):
+            env_cfg.observations.rgb_camera = None
+            print("[PEG_ORACLE] disabled_observation_group=rgb_camera", flush=True)
     print("[PEG_ORACLE] make_env", flush=True)
     env = gym.make(args_cli.task, cfg=env_cfg).unwrapped
 

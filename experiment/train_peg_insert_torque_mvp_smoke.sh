@@ -146,9 +146,7 @@ if [[ "$USE_TORQUE_LSTM" == "true" ]]; then
     --policy.torque_lstm_output_dim=16 \
     --policy.torque_lstm_num_layers=1 \
     --policy.torque_lstm_weights_path="$TORQUE_LSTM_WEIGHTS" \
-    --policy.train_torque_lstm=false \
-    --policy.torque_zero_init_adapter=true \
-    --policy.torque_gate_init="$TORQUE_GATE_INIT" 2>&1 \
+    --policy.train_torque_lstm=false 2>&1 \
     | tee "$RUNTIME_ROOT/persistent/logs/${RUN_NAME}.log"
 else
   "$LEROBOT_ENV/bin/lerobot-train" \

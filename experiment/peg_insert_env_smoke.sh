@@ -19,7 +19,8 @@ DUMP_AFTER_S="${DUMP_AFTER_S:-60}"
 ACTION_MODE="${ACTION_MODE:-zero}"
 ACTION_SCALE="${ACTION_SCALE:-0.01}"
 DEVICE="${DEVICE:-cuda:0}"
-ENABLE_CAMERAS="${ENABLE_CAMERAS:-1}"
+EXPERIENCE="${EXPERIENCE:-$([[ "${ENABLE_CAMERAS:-0}" == "1" ]] && echo isaacsim_4_5/isaaclab.python.headless.rendering.kit || echo isaacsim_4_5/isaaclab.python.headless.kit)}"
+ENABLE_CAMERAS="${ENABLE_CAMERAS:-0}"
 PEG_INSERT_DISABLE_CAMERAS="${PEG_INSERT_DISABLE_CAMERAS:-$([[ "${ENABLE_CAMERAS:-1}" == "1" ]] && echo 0 || echo 1)}"
 PEG_INSERT_PROCEDURAL_ASSETS="${PEG_INSERT_PROCEDURAL_ASSETS:-1}"
 PEG_INSERT_SIMPLE_TABLE="${PEG_INSERT_SIMPLE_TABLE:-1}"
@@ -59,6 +60,7 @@ echo "  assets:   $([[ "$PEG_INSERT_PROCEDURAL_ASSETS" == "1" ]] && echo procedu
 echo "  table:    $([[ "$PEG_INSERT_SIMPLE_TABLE" == "1" ]] && echo simple || echo usd)"
 echo "  seconds:  $TIMEOUT_SECONDS"
 echo "  device:   $DEVICE"
+echo "  exp:      $EXPERIENCE"
 echo "  TMPDIR:   $TMPDIR"
 
 LOG_PATH="$RUNTIME_ROOT/persistent/logs/peg_insert_env_smoke.log"
@@ -73,7 +75,7 @@ cmd=(
   --action_scale "$ACTION_SCALE"
   --device "$DEVICE"
   --headless
-  --experience=isaacsim_4_5/isaaclab.python.headless.rendering.kit
+  --experience="$EXPERIENCE"
 )
 if [[ "$ENABLE_CAMERAS" == "1" ]]; then
   cmd+=(--enable_cameras)

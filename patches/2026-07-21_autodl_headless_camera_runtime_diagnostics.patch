@@ -1,0 +1,45 @@
+--- a/IsaacLab-Tactile/source/isaaclab/isaaclab/sim/simulation_context.py
++++ b/IsaacLab-Tactile/source/isaaclab/isaaclab/sim/simulation_context.py
+@@ -207,10 +207,15 @@
+         # check the case where we don't need to render the viewport
+         # since render_viewport can only be False in headless mode, we only need to check for offscreen_render
+         if not self._render_viewport and self._offscreen_render:
+-            # disable the viewport if offscreen_render is enabled
++            # Disable the viewport if offscreen_render is enabled. In truly headless
++            # AutoDL runs, omni.kit.viewport.window is intentionally not loaded to
++            # avoid a segfault in omni.kit.widget.viewport during stage open; in
++            # that case get_active_viewport() returns None, which is safe to skip.
+             from omni.kit.viewport.utility import get_active_viewport
+ 
+-            get_active_viewport().updates_enabled = False
++            active_viewport = get_active_viewport()
++            if active_viewport is not None:
++                active_viewport.updates_enabled = False
+ 
+         # override enable scene querying if rendering is enabled
+         # this is needed for some GUI features
+--- a/isaacsim/extscache/omni.replicator.core-1.11.35+106.5.0/config/extension.toml
++++ b/isaacsim/extscache/omni.replicator.core-1.11.35+106.5.0/config/extension.toml
+@@ -66,7 +66,8 @@
+ "omni.kit.primitive.mesh" = {}
+ "omni.kit.material.library" = {}
+ "omni.kit.viewport.utility" = {}
+-"omni.kit.viewport.window" = {}
++# Disabled on AutoDL headless: avoids omni.kit.widget.viewport segfault during stage open.
++# "omni.kit.viewport.window" = {}
+ "omni.physx" = {}
+ "omni.timeline" = {}
+ "omni.warp" = {}
+--- a/isaacsim/extscache/omni.kit.widget.viewport-107.0.7/omni/kit/widget/viewport/impl/texture.py
++++ b/isaacsim/extscache/omni.kit.widget.viewport-107.0.7/omni/kit/widget/viewport/impl/texture.py
+@@ -372,6 +372,10 @@
+         return True
+ 
+     def __enable_hydra_engine(self, hd_engine_name, usd_context):
++        import os
++
++        if os.environ.get("PEG_INSERT_SKIP_VIEWPORT_WIDGET_HYDRA", "0") == "1":
++            return
+         if hd_engine_name in usd_context.get_attached_hydra_engine_names():
+             return
+         omni.usd.add_hydra_engine(hd_engine_name, usd_context)

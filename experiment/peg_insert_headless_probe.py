@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import faulthandler
 import sys
+import traceback
 from collections.abc import Mapping
 
 from isaaclab.app import AppLauncher
@@ -104,6 +105,23 @@ def _make_action(env: gym.Env, step: int) -> torch.Tensor:
 def main() -> None:
     print("[PEG_PROBE] parsing_env_cfg", flush=True)
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
+    if args_cli.enable_cameras:
+        # The peg-insert visual policy only consumes RGB. On this AutoDL headless
+        # stack the distance_to_image_plane annotator can return an empty buffer,
+        # so keep camera sensors RGB-only for data collection/evaluation.
+        for name in ("wrist_cam", "table_cam"):
+            sensor_cfg = getattr(env_cfg.scene, name, None)
+            if sensor_cfg is not None and hasattr(sensor_cfg, "data_types"):
+                sensor_cfg.data_types = ["rgb"]
+                print(f"[PEG_PROBE] camera_rgb_only={name}", flush=True)
+    else:
+        for name in ("wrist_cam", "table_cam"):
+            if hasattr(env_cfg.scene, name):
+                setattr(env_cfg.scene, name, None)
+                print(f"[PEG_PROBE] disabled_scene_sensor={name}", flush=True)
+        if hasattr(env_cfg.observations, "rgb_camera"):
+            env_cfg.observations.rgb_camera = None
+            print("[PEG_PROBE] disabled_observation_group=rgb_camera", flush=True)
     print("[PEG_PROBE] making_env", flush=True)
     env = gym.make(args_cli.task, cfg=env_cfg)
 
@@ -155,6 +173,10 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
+    except BaseException as exc:
+        print(f"[PEG_PROBE] exception type={type(exc).__name__} repr={exc!r}", flush=True)
+        traceback.print_exc()
+        raise
     finally:
         faulthandler.cancel_dump_traceback_later()
         simulation_app.close()
