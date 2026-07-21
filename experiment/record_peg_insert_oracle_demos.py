@@ -63,6 +63,9 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 import isaaclab_tasks  # noqa: F401,E402
+from isaaclab.managers import ObservationTermCfg as ObsTerm  # noqa: E402
+from isaaclab.managers import SceneEntityCfg  # noqa: E402
+from isaaclab_tasks.manager_based.manipulation.peg_insert import mdp  # noqa: E402
 from isaaclab_tasks.utils.parse_cfg import parse_env_cfg  # noqa: E402
 
 
@@ -221,6 +224,16 @@ def main() -> None:
             if sensor_cfg is not None and hasattr(sensor_cfg, "data_types"):
                 sensor_cfg.data_types = ["rgb"]
                 print(f"[PEG_ORACLE] camera_rgb_only={name}", flush=True)
+        if (
+            hasattr(env_cfg.observations, "rgb_camera")
+            and getattr(env_cfg.scene, "table_cam", None) is not None
+            and not hasattr(env_cfg.observations.rgb_camera, "table_cam")
+        ):
+            env_cfg.observations.rgb_camera.table_cam = ObsTerm(
+                func=mdp.image,
+                params={"sensor_cfg": SceneEntityCfg("table_cam"), "data_type": "rgb", "normalize": False},
+            )
+            print("[PEG_ORACLE] enabled_observation=rgb_camera.table_cam", flush=True)
     else:
         for name in ("wrist_cam", "table_cam"):
             if hasattr(env_cfg.scene, name):

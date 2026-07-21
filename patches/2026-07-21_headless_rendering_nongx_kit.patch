@@ -1,0 +1,15 @@
+--- a/IsaacLab-Tactile/apps/isaacsim_4_5/isaaclab.python.headless.rendering.kit
++++ b/IsaacLab-Tactile/apps/isaacsim_4_5/isaaclab.python.headless.rendering.nongx.kit
+@@ -143,3 +143,12 @@
+ persistent.isaac.asset_root.default = "http://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/4.5"
+ persistent.isaac.asset_root.cloud = "http://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/4.5"
+ persistent.isaac.asset_root.nvidia = "http://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/4.5"
++
++
++# AutoDL RTX/Hydra diagnostic: disable NGX/DLSS to avoid hangs after
++# "Failed to create NGX context" on headless instances.
++[settings]
++ngx.enabled = false
++rtx.post.dlss.enabled = false
++rtx-transient.dlssg.enabled = false
++rtx.post.dlss.execMode = 0

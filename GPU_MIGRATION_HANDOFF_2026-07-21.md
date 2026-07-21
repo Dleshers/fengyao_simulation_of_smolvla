@@ -162,3 +162,7 @@ Acceptance: `reset_obs.rgb_camera.wrist_cam` and step image stats must be non-em
 ## 8. If camera still fails on the new machine
 
 Then continue non-visual/tactile/state experiments on this storage and report that online RGB Isaac camera validation remains blocked by the GPU image/driver stack. The no-camera path is known to work and is still useful for torque/state feasibility, but it cannot substitute for final visual closed-loop validation.
+
+## 9. New GPU validation update (2026-07-21)
+
+After migration to RTX 4090 with driver `560.35.03`, headless RGB capture is working with `isaaclab.python.headless.rendering.nongx.kit`, which disables NGX/DLSS. See `experiment_results/2026-07-21_new_gpu_headless_camera_validation.md`. Both standalone Replicator RGB and peg_insert `wrist_cam`/`table_cam` smoke tests passed, followed by a 1-demo RGB HDF5 collection and LeRobot conversion/audit.
