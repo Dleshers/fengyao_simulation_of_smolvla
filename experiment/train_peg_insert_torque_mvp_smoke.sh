@@ -58,6 +58,7 @@ LOG_FREQ="${LOG_FREQ:-10}"
 NUM_WORKERS="${NUM_WORKERS:-0}"
 TORQUE_GATE_INIT="${TORQUE_GATE_INIT:-1.0}"
 STATE_DIM="${STATE_DIM:-21}"
+ACTION_DIM="${ACTION_DIM:-7}"
 MAX_STATE_DIM="${MAX_STATE_DIM:-32}"
 
 TMP_BASE="${TMP_BASE:-/tmp/svl}"
@@ -113,7 +114,7 @@ echo "  seed/batch:       $SEED / $BATCH_SIZE"
 "$LEROBOT_ENV/bin/python" "$REPO_ROOT/experiment/audit_lerobot_dataset_features.py" \
   --repo-id "$DATASET_REPO_ID" \
   --root "$DATASET_ROOT" \
-  --state-dim "$STATE_DIM"
+  --state-dim "$STATE_DIM" --action-dim "$ACTION_DIM"
 
 cd "$LEROBOT_ROOT"
 

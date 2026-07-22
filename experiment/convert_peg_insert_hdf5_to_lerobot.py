@@ -29,6 +29,10 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 FULL_STATE_DIM = 49
 COMPACT_STATE_DIM = 21
+# Deliberately excludes peg/hole ground-truth poses. It leaves visual models
+# enough robot proprioception for control while forcing scene geometry to come
+# from RGB rather than privileged simulator state.
+PROPRIO12_STATE_DIM = 12
 ACTION_DIM = 7
 
 
@@ -38,6 +42,9 @@ def _select_state(state: np.ndarray, mode: str) -> np.ndarray:
     if mode == "compact21":
         # [joint_pos_rel(9), eef_pos(3), peg_pos(3), hole_pos(3), peg_to_hole_pos(3)]
         return np.concatenate([state[0:9], state[25:28], state[32:35], state[39:42], state[46:49]], axis=0)
+    if mode == "proprio12":
+        # [joint_pos_rel(9), eef_pos(3)]; intentionally no peg/hole pose.
+        return np.concatenate([state[0:9], state[25:28]], axis=0)
     raise ValueError(f"Unsupported state mode: {mode}")
 
 
@@ -77,12 +84,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--robot-type", type=str, default="isaaclab_peg_insert_franka")
     parser.add_argument(
         "--state-mode",
-        choices=("full49", "compact21"),
+        choices=("full49", "compact21", "proprio12"),
         default="full49",
         help=(
             "full49 preserves the Isaac policy observation. compact21 keeps proprioception and task geometry "
             "within official SmolVLA base max_state_dim=32: joint_pos(9), eef_pos(3), peg_pos(3), "
-            "hole_pos(3), peg_to_hole_pos(3)."
+            "hole_pos(3), peg_to_hole_pos(3). proprio12 keeps only joint_pos(9) and eef_pos(3), "
+            "so peg/hole geometry must be inferred from RGB."
         ),
     )
     parser.add_argument("--torque-window-size", type=int, default=30)
@@ -113,7 +121,11 @@ def main() -> None:
     root = args.output_dir / args.repo_id
     if root.exists():
         raise FileExistsError(f"Refusing to overwrite existing LeRobot dataset: {root}")
-    state_dim = FULL_STATE_DIM if args.state_mode == "full49" else COMPACT_STATE_DIM
+    state_dim = {
+        "full49": FULL_STATE_DIM,
+        "compact21": COMPACT_STATE_DIM,
+        "proprio12": PROPRIO12_STATE_DIM,
+    }[args.state_mode]
 
     features = {
         "observation.state": {"dtype": "float32", "shape": (state_dim,), "names": None},

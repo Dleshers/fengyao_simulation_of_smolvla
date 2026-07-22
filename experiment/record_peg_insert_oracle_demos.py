@@ -35,6 +35,15 @@ parser.add_argument("--max_attempts", type=int, default=20)
 parser.add_argument("--max_steps", type=int, default=260)
 parser.add_argument("--success_hold_steps", type=int, default=5)
 parser.add_argument(
+    "--insert_target_z",
+    type=float,
+    default=0.018,
+    help=(
+        "Final end-effector target height relative to the hole root, in metres. "
+        "The legacy value is 0.018; lower values are used only for finite strict-insertion feasibility probes."
+    ),
+)
+parser.add_argument(
     "--success_mode",
     choices=("inserted", "preinsert_alignment"),
     default="inserted",
@@ -172,7 +181,7 @@ def _phase_target(
     lift = peg + np.array([0.0, 0.0, 0.18], dtype=np.float32)
     hole_above = hole + np.array([0.0, 0.0, 0.16], dtype=np.float32)
     hole_preinsert = hole + np.array([0.0, 0.0, 0.055], dtype=np.float32)
-    hole_insert = hole + np.array([0.0, 0.0, 0.018], dtype=np.float32)
+    hole_insert = hole + np.array([0.0, 0.0, args_cli.insert_target_z], dtype=np.float32)
 
     if step < 35:
         return peg_above, True
