@@ -1,21 +1,19 @@
-# SmolVLA headless simulation handoff
+# Causal torque recovery benchmark for SmolVLA
 
-This repository transfers the code and operating notes for evaluating:
+This repository contains the reproducible code and runtime patches for a strict simulated Factory peg-in-hole benchmark. It compares visual SmolVLA with a frozen causal gripper-torque LSTM token, plus zero-torque and shuffled-torque controls.
 
-1. visual-only SmolVLA;
-2. visual SmolVLA with a causal `[30,1]` gripper-torque LSTM token injected into the Action Expert suffix.
+The supported experiment is **Factory causal-recovery v2**:
 
-Start here:
+- state: `float32[12]` = 9 robot joints + 3D fingertip midpoint;
+- action: `float32[6]` Factory delta pose;
+- observations: two RGB cameras (`224×224` after conversion);
+- torque: causal scalar-L2 history `float32[30,1]`, oldest → newest;
+- raw collection: observations are recorded **before** executing `action_t`;
+- recovery data: an unlabelled lateral perturbation followed by oracle-labelled corrective actions;
+- strict success: lateral error `< 2.5 mm` and relative insertion depth `< 1 mm`.
 
-0. For the current GPU/storage migration, read [`GPU_MIGRATION_HANDOFF_2026-07-21.md`](GPU_MIGRATION_HANDOFF_2026-07-21.md) first.
-1. Read [`START_HDF5_COLLECTION.md`](START_HDF5_COLLECTION.md) for immediate restore and collection commands.
-2. Read [`REMOTE_RETRAINING_HANDOFF.md`](REMOTE_RETRAINING_HANDOFF.md) for the current authoritative state.
-3. Read [`PROGRESS_2026-07-06.md`](PROGRESS_2026-07-06.md) for the completed collection audit and current baseline-training status.
-4. Read [`HUGGINGFACE_ARTIFACTS.md`](HUGGINGFACE_ARTIFACTS.md) to authenticate and restore the private dataset and trained model on another machine.
-5. Read [`REMOTE_HEADLESS_EVAL_HANDOFF.md`](REMOTE_HEADLESS_EVAL_HANDOFF.md) for historical evaluation setup.
-6. Read [`remote_handoff_gripper_lstm/README_FOR_REMOTE_AGENT.md`](remote_handoff_gripper_lstm/README_FOR_REMOTE_AGENT.md).
-7. Apply the current workspace patches and supplied policy overrides.
-8. Rebuild the matched dataset and retrain both arms from official `lerobot/smolvla_base`.
+Start with [docs/REPRODUCE_FACTORY_CAUSAL_RECOVERY_V2.md](docs/REPRODUCE_FACTORY_CAUSAL_RECOVERY_V2.md). It is the only current operational guide.
 
-Large checkpoints are deliberately stored as Release assets, not in normal Git history.
-The old release checkpoints are historical artifacts and are not valid for the final controlled comparison.
+Historical reports under `experiment_results/` are retained as evidence, not as instructions. Old handoff documents and legacy pick-and-place instructions were removed because their paths, schemas, and camera assumptions do not reproduce this benchmark.
+
+Large files—Isaac Sim, source clones, datasets, checkpoints, logs, and Hugging Face caches—are intentionally excluded from Git. Runtime patches and an exact Python package snapshot are tracked here.

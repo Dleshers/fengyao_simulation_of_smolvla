@@ -7,7 +7,7 @@ from pathlib import Path
 from isaaclab.app import AppLauncher
 p=argparse.ArgumentParser()
 p.add_argument('--policy-path',type=Path,required=True); p.add_argument('--dataset-root',type=Path,required=True); p.add_argument('--repo-id',required=True)
-p.add_argument('--output',type=Path,required=True); p.add_argument('--episodes',type=int,default=10); p.add_argument('--seed',type=int,default=3100); p.add_argument('--max-steps',type=int,default=360); p.add_argument('--torque-mode',choices=('none','original','zero','shuffle'),default='none')
+p.add_argument('--output',type=Path,required=True); p.add_argument('--episodes',type=int,default=10); p.add_argument('--seed',type=int,default=3100); p.add_argument('--max-steps',type=int,default=360); p.add_argument('--torque-mode',choices=('none','original','zero','shuffle'),default='none'); p.add_argument('--n-action-steps',type=int,default=None)
 AppLauncher.add_app_launcher_args(p); a=p.parse_args(); app=AppLauncher(a).app
 site=os.environ.get("LEROBOT_SITE_PACKAGES")
 source=os.environ.get("LEROBOT_SOURCE")
@@ -50,6 +50,7 @@ raw_cfg.pop("tactile_token_mode", None)
 compat_dir=Path(tempfile.mkdtemp(prefix="factory_eval_cfg_"))
 (compat_dir/"config.json").write_text(json.dumps(raw_cfg))
 cfg=PreTrainedConfig.from_pretrained(compat_dir); cfg.pretrained_path=str(a.policy_path); cfg.device='cuda'
+if a.n_action_steps is not None: cfg.n_action_steps=a.n_action_steps
 if a.torque_mode=='none': cfg.use_torque_lstm=False
 meta=LeRobotDatasetMetadata(a.repo_id,root=a.dataset_root)
 policy=make_policy(cfg=cfg,ds_meta=meta); policy.eval()
@@ -58,7 +59,7 @@ ecfg=parse_env_cfg('Isaac-Factory-PegInsert-Direct-v0',device='cuda:0',num_envs=
 env=gym.make('Isaac-Factory-PegInsert-Direct-v0',cfg=ecfg); e=env.unwrapped; anns=cameras(); a.output.parent.mkdir(parents=True,exist_ok=True)
 rows=[]; rng=np.random.default_rng(a.seed)
 for ep in range(a.episodes):
- env.reset(seed=a.seed+ep); policy.reset(); torques=deque(maxlen=30); hit=False; xy=z=float('inf')
+ episode_seed=a.seed+ep; env.reset(seed=episode_seed); torch.manual_seed(episode_seed); torch.cuda.manual_seed_all(episode_seed); policy.reset(); torques=deque(maxlen=30); hit=False; xy=z=float('inf')
  for step in range(a.max_steps):
   e.sim.render(); torque=np.array([float(np.linalg.norm(npv(e.joint_torque[0,:7])))],np.float32); torques.append(torque)
   while len(torques)<30: torques.appendleft(torque.copy())
@@ -73,6 +74,6 @@ for ep in range(a.episodes):
   if hit: break
  rows.append({'episode':ep,'seed':a.seed+ep,'success':bool(hit),'steps':step+1,'final_xy_error_m':xy,'final_depth_m':z})
  print('[FACTORY_EVAL]',rows[-1],flush=True)
-summary={'torque_mode':a.torque_mode,'policy':str(a.policy_path),'episodes':a.episodes,'successes':sum(r['success'] for r in rows),'success_rate':sum(r['success'] for r in rows)/a.episodes,'strict_definition':'xy<0.0025m and held_z-hole_z<0.001m','rows':rows}
+summary={'torque_mode':a.torque_mode,'n_action_steps':cfg.n_action_steps,'policy':str(a.policy_path),'episodes':a.episodes,'successes':sum(r['success'] for r in rows),'success_rate':sum(r['success'] for r in rows)/a.episodes,'strict_definition':'xy<0.0025m and held_z-hole_z<0.001m','rows':rows}
 a.output.write_text(json.dumps(summary,indent=2)+'\n'); print('[FACTORY_EVAL] SUMMARY',json.dumps(summary),flush=True)
 env.close(); app.close()

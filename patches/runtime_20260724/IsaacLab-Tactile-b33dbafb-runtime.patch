@@ -1,0 +1,411 @@
+diff --git a/lerobot/convert_pick_place_basket_joint_tacex.py b/lerobot/convert_pick_place_basket_joint_tacex.py
+index 15b6599f..5247782f 100644
+--- a/lerobot/convert_pick_place_basket_joint_tacex.py
++++ b/lerobot/convert_pick_place_basket_joint_tacex.py
+@@ -35,7 +35,7 @@ def parse_args():
+         default=None,
+         help="Repository ID for the dataset (default: derived from input filename)",
+     )
+-    parser.add_argument("--fps", type=int, default=30, help="Frames per second of demonstrations")
++    parser.add_argument("--fps", type=int, default=20, help="Policy/control frequency of demonstrations")
+     parser.add_argument(
+         "--task",
+         type=str,
+@@ -43,9 +43,7 @@ def parse_args():
+         help="Task description included in dataset",
+     )
+     parser.add_argument("--robot-type", type=str, default="isaaclab_tactile", help="Robot type identifier")
+-    parser.add_argument("--force-grid-height", type=int, default=10, help="Synthetic force-grid height")
+-    parser.add_argument("--force-grid-width", type=int, default=12, help="Synthetic force-grid width")
+-    parser.add_argument("--num-fingertips", type=int, default=2, help="Number of fingertips")
++    parser.add_argument("--torque-window-size", type=int, default=30, help="Causal gripper-torque window")
+     parser.add_argument("--use-videos", action="store_true", help="Store images as videos")
+     return parser.parse_args()
+ 
+@@ -65,31 +63,29 @@ def _extract_gripper_qpos(demo: h5py.Group, t: int, joint_pos_t: np.ndarray) ->
+ 
+ def _extract_image(demo: h5py.Group, key: str, t: int, default_h: int = 224, default_w: int = 224) -> np.ndarray:
+     if key not in demo:
+-        return np.zeros((default_h, default_w, 3), dtype=np.uint8)
++        raise KeyError(f"Demo '{demo.name}' is missing required camera field '{key}'")
+     img = np.asarray(demo[key][t])
+     if img.dtype != np.uint8:
+         img = np.clip(img, 0, 255).astype(np.uint8)
+     if img.ndim != 3:
+-        return np.zeros((default_h, default_w, 3), dtype=np.uint8)
++        raise ValueError(f"Demo '{demo.name}' field '{key}' has invalid image shape {img.shape}")
+     if img.shape[-1] == 4:
+         img = img[..., :3]
+     if img.shape[-1] != 3:
+-        return np.zeros((default_h, default_w, 3), dtype=np.uint8)
++        raise ValueError(f"Demo '{demo.name}' field '{key}' has invalid image shape {img.shape}")
++    if img.shape[:2] != (default_h, default_w):
++        raise ValueError(
++            f"Demo '{demo.name}' field '{key}' must be {default_h}x{default_w}, got {img.shape[:2]}"
++        )
+     return img
+ 
+ 
+-def _extract_force_grid(demo: h5py.Group, t: int, num_fingertips: int, h: int, w: int) -> np.ndarray:
+-    scale = 1.0 / float(h * w)
+-    grid = np.zeros((num_fingertips, h, w, 3), dtype=np.float32)
+-
+-    if "force_geometric_left" in demo:
+-        f_left = np.asarray(demo["force_geometric_left"][t], dtype=np.float32).reshape(3)
+-        grid[0] = np.broadcast_to(f_left[None, None, :] * scale, (h, w, 3)).astype(np.float32)
+-    if num_fingertips > 1 and "force_geometric_right" in demo:
+-        f_right = np.asarray(demo["force_geometric_right"][t], dtype=np.float32).reshape(3)
+-        grid[1] = np.broadcast_to(f_right[None, None, :] * scale, (h, w, 3)).astype(np.float32)
+-
+-    return grid
++def _causal_torque_window(values: np.ndarray, t: int, size: int) -> np.ndarray:
++    start = max(0, t - size + 1)
++    history = values[start : t + 1]
++    if history.shape[0] < size:
++        history = np.concatenate([np.repeat(history[:1], size - history.shape[0], axis=0), history], axis=0)
++    return history.astype(np.float32, copy=False)
+ 
+ 
+ def main():
+@@ -117,9 +113,9 @@ def main():
+             "shape": (3, 224, 224),
+             "names": ["channels", "height", "width"],
+         },
+-        "observation.tactile.force_grid": {
++        "observation.gripper_torque": {
+             "dtype": "float32",
+-            "shape": (args.num_fingertips, args.force_grid_height, args.force_grid_width, 3),
++            "shape": (args.torque_window_size, 1),
+             "names": None,
+         },
+     }
+@@ -136,6 +132,16 @@ def main():
+     with h5py.File(args.input, "r") as f:
+         if "data" not in f:
+             raise KeyError("Expected top-level 'data' group in HDF5.")
++        expected_state = "joint_state_9d:[arm_joint_pos(7),gripper_qpos(2)]"
++        expected_action = "joint_action_8d:[arm_joint_pos_target_abs(7),gripper_cmd(1)]"
++        if f.attrs.get("state_schema") != expected_state or f.attrs.get("action_schema") != expected_action:
++            raise ValueError(
++                "HDF5 schema mismatch: expected joint 9D state and absolute 8D joint actions, got "
++                f"state={f.attrs.get('state_schema')!r}, action={f.attrs.get('action_schema')!r}"
++            )
++        recorded_fps = int(f.attrs.get("fps", args.fps))
++        if recorded_fps != args.fps:
++            raise ValueError(f"FPS mismatch: HDF5={recorded_fps}, requested dataset FPS={args.fps}")
+         demos = sorted(f["data"].keys())
+         print(f"Processing {len(demos)} demonstrations...")
+ 
+@@ -145,6 +151,9 @@ def main():
+                 raise KeyError(f"Demo '{demo_name}' missing 'actions'.")
+             if "joint_pos" not in demo:
+                 raise KeyError(f"Demo '{demo_name}' missing 'joint_pos'.")
++            for required in ("gripper_pos", "gripper_torque", "rgb_table", "rgb_wrist"):
++                if required not in demo:
++                    raise KeyError(f"Demo '{demo_name}' missing required field '{required}'.")
+ 
+             actions = np.asarray(demo["actions"])
+             if actions.ndim != 2 or actions.shape[1] != action_dim:
+@@ -153,6 +162,14 @@ def main():
+                 )
+ 
+             T = int(actions.shape[0])
++            for required in ("joint_pos", "gripper_pos", "gripper_torque", "rgb_table", "rgb_wrist"):
++                if len(demo[required]) != T:
++                    raise ValueError(
++                        f"Demo '{demo_name}' length mismatch: actions={T}, {required}={len(demo[required])}"
++                    )
++            torque_values = np.asarray(demo["gripper_torque"], dtype=np.float32).reshape(T, 1)
++            if not np.isfinite(torque_values).all():
++                raise ValueError(f"Demo '{demo_name}' gripper_torque contains NaN or Inf")
+             print(f"  [{idx}/{len(demos)}] {demo_name}: {T} steps", end="\r")
+ 
+             for t in range(T):
+@@ -164,21 +181,15 @@ def main():
+                 state = np.concatenate([arm_joint_pos, gripper_qpos], axis=0).astype(np.float32)
+ 
+                 action = actions[t].astype(np.float32)
+-                force_grid = _extract_force_grid(
+-                    demo,
+-                    t,
+-                    num_fingertips=args.num_fingertips,
+-                    h=args.force_grid_height,
+-                    w=args.force_grid_width,
+-                )
+-
+                 frame = {
+                     "task": args.task,
+                     "observation.state": state,
+                     "action": action,
+                     "observation.images.camera1": _extract_image(demo, "rgb_table", t),
+                     "observation.images.camera2": _extract_image(demo, "rgb_wrist", t),
+-                    "observation.tactile.force_grid": force_grid,
++                    "observation.gripper_torque": _causal_torque_window(
++                        torque_values, t, args.torque_window_size
++                    ),
+                 }
+                 ds.add_frame(frame)
+ 
+@@ -192,6 +203,7 @@ def main():
+     print("Dataset convention:")
+     print("  State (9D): [arm_joint_pos(7), gripper_qpos(2)]")
+     print("  Action (8D): [arm_joint_pos_target_abs(7), gripper(1)]")
++    print(f"  Torque: causal [{args.torque_window_size},1], newest at index -1")
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/lerobot/convert_pick_place_basket_tacex.py b/lerobot/convert_pick_place_basket_tacex.py
+index 1fc91584..1c45a6f1 100644
+--- a/lerobot/convert_pick_place_basket_tacex.py
++++ b/lerobot/convert_pick_place_basket_tacex.py
+@@ -104,6 +104,9 @@ def parse_args():
+         action="store_true",
+         help="Store raw world-frame fields for debugging",
+     )
++    parser.add_argument(
++        "--torque-window-size", type=int, default=30, help="Causal gripper torque window length."
++    )
+     return parser.parse_args()
+ 
+ 
+@@ -148,6 +151,11 @@ def main():
+             "shape": (args.num_fingertips, args.force_grid_height, args.force_grid_width, 3),
+             "names": None,
+         },
++        "observation.gripper_torque": {
++            "dtype": "float32",
++            "shape": (args.torque_window_size, 1),
++            "names": None,
++        },
+     }
+ 
+     # Optionally add debug fields
+@@ -177,7 +185,11 @@ def main():
+ 
+         for idx, demo_name in enumerate(demos, 1):
+             demo = f["data"][demo_name]
+-            T = demo["actions"].shape[0]
++            action_key = "teacher_actions_ik" if "teacher_actions_ik" in demo else "actions"
++            T = demo[action_key].shape[0]
++            if "gripper_torque" not in demo:
++                raise KeyError(f"{demo_name} is missing required gripper_torque")
++            torque_values = demo["gripper_torque"][:].astype(np.float32).reshape(T, 1)
+ 
+             print(f"  [{idx}/{total_demos}] {demo_name}: {T} steps", end="\r")
+ 
+@@ -211,7 +223,9 @@ def main():
+                 )
+ 
+                 # Get raw action from HDF5 (7D: [delta_pos(3), delta_rot(3), gripper(1)])
+-                raw_action = demo["actions"][t].astype(np.float32)
++                raw_action = demo[action_key][t].astype(np.float32)
++                if raw_action.shape != (7,):
++                    raise ValueError(f"Expected 7D IK-relative action, got {raw_action.shape} in {demo_name}")
+ 
+                 # Transform action from world frame to base frame (7D)
+                 delta_pos_w = raw_action[:3]
+@@ -240,6 +254,13 @@ def main():
+                     "observation.images.camera1": demo["rgb_table"][t],
+                     "observation.images.camera2": demo["rgb_wrist"][t],
+                     "observation.tactile.force_grid": grid,
++                    "observation.gripper_torque": np.concatenate(
++                        [
++                            np.repeat(torque_values[:1], max(0, args.torque_window_size - t - 1), axis=0),
++                            torque_values[max(0, t - args.torque_window_size + 1) : t + 1],
++                        ],
++                        axis=0,
++                    ).astype(np.float32),
+                 }
+ 
+                 # Optionally store debug fields
+diff --git a/scripts/environments/state_machine/pick_place_basket_tacex_sm.py b/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+index b4d019f3..485aeb1c 100644
+--- a/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
++++ b/scripts/environments/state_machine/pick_place_basket_tacex_sm.py
+@@ -22,6 +22,7 @@ from isaaclab.app import AppLauncher
+ parser = argparse.ArgumentParser(description="TacEx Pick and Place Basket with full recording.")
+ parser.add_argument("--num_envs", type=int, default=4)
+ parser.add_argument("--num_demos", type=int, default=100)
++parser.add_argument("--seed", type=int, default=1000)
+ parser.add_argument("--save_demos", action="store_true")
+ parser.add_argument(
+     "--output_dir",
+@@ -1009,6 +1010,8 @@ class DataRecorder:
+             f.attrs["state_schema"] = "joint_state_9d:[arm_joint_pos(7),gripper_qpos(2)]"
+             f.attrs["action_schema"] = "joint_action_8d:[arm_joint_pos_target_abs(7),gripper_cmd(1)]"
+             f.attrs["teacher_control_mode"] = "ik_rel"
++            f.attrs["fps"] = 20
++            f.attrs["torque_schema"] = "gripper_torque:[1], mean of the two gripper joint applied torques"
+     
+     def _empty_buffer(self):
+         return {
+@@ -1021,6 +1024,7 @@ class DataRecorder:
+             "base_pos": [],
+             "base_quat": [],
+             "gripper_pos": [],
++            "gripper_torque": [],
+             "cube_pos": [],
+             "cube_quat": [],
+             "basket_pos": [],
+@@ -1120,7 +1124,7 @@ class DataRecorder:
+         writer = cv2.VideoWriter(
+             out_path,
+             cv2.VideoWriter_fourcc(*"mp4v"),
+-            30.0,
++            20.0,
+             (out_width, out_height),
+         )
+         if not writer.isOpened():
+@@ -1407,6 +1411,9 @@ def main():
+                             "base_pos": base_pos[i].cpu().numpy(),  # Robot base position
+                             "base_quat": base_quat[i].cpu().numpy(),  # Robot base quaternion (x,y,z,w)
+                             "gripper_pos": robot.data.joint_pos[i, -2:].cpu().numpy(),
++                            "gripper_torque": np.array(
++                                [float(robot.data.applied_torque[i, -2:].mean().item())], dtype=np.float32
++                            ),
+                             "cube_pos": cube_pose[i, :3].cpu().numpy(),
+                             "cube_quat": cube_pose[i, 3:7].cpu().numpy(),
+                             "basket_pos": basket_pose[i, :3].cpu().numpy(),
+@@ -1578,4 +1585,3 @@ def main():
+ if __name__ == "__main__":
+     main()
+     simulation_app.close()
+-
+diff --git a/scripts/eval_server.py b/scripts/eval_server.py
+index d526e557..d6869f33 100644
+--- a/scripts/eval_server.py
++++ b/scripts/eval_server.py
+@@ -45,11 +45,19 @@ def parse_args():
+     parser.add_argument(
+         "--env",
+         type=str,
+-        default="Isaac-Pick-Place-Basket-Franka-Joint-TacEx-v0",
++        default="Isaac-Pick-Place-Basket-Franka-IK-Rel-TacEx-v0",
+         help="IsaacLab environment name",
+     )
+     parser.add_argument("--img_height", type=int, default=224, help="Camera image height")
+     parser.add_argument("--img_width", type=int, default=224, help="Camera image width")
++    parser.add_argument(
++        "--send-gripper-torque-window",
++        action="store_true",
++        help="Include a causal gripper torque window in each observation.",
++    )
++    parser.add_argument(
++        "--torque-window-size", type=int, default=30, help="Length of the gripper torque history."
++    )
+     parser.add_argument(
+         "--background_texture",
+         type=str,
+@@ -103,17 +111,22 @@ class IsaacLabEnvWrapper:
+     
+     def __init__(
+         self, 
+-        env_name: str = "Isaac-Pick-Place-Basket-Franka-Joint-TacEx-v0",
++        env_name: str = "Isaac-Pick-Place-Basket-Franka-IK-Rel-TacEx-v0",
+         device: str = "cuda:0",
+         img_height: int = 224,
+         img_width: int = 224,
+         background_texture: str = "small_empty_house_4k.hdr",
++        send_gripper_torque_window: bool = False,
++        torque_window_size: int = 30,
+     ):
+         self.env_name = env_name
+         self.device = device
+         self.img_height = img_height
+         self.img_width = img_width
+         self.background_texture = background_texture
++        self.send_gripper_torque_window = send_gripper_torque_window
++        self.torque_window_size = torque_window_size
++        self._gripper_torque_history: list[np.ndarray] = []
+         self.env = None
+         self._step_count = 0
+         self._max_episode_steps = 300
+@@ -126,7 +139,7 @@ class IsaacLabEnvWrapper:
+     def _setup_env(self):
+         """Set up the IsaacLab environment."""
+         try:
+-            env_cfg = parse_env_cfg(self.env_name, device=self.device, num_envs=1)
++            env_cfg = parse_env_cfg(self.env_name, device=self.device, num_envs=1, use_fabric=False)
+             self.has_tacex = "TacEx" in self.env_name
+         except Exception as e:
+             raise RuntimeError(
+@@ -250,6 +263,10 @@ class IsaacLabEnvWrapper:
+                 force_grid[1] = self._compute_force_grid(hmap[0])
+         
+         obs["tactile_force_grid"] = force_grid
++
++        if self.send_gripper_torque_window:
++            self._append_current_gripper_torque()
++            obs["gripper_torque"] = self._get_padded_gripper_torque_window()
+         
+         # Add placeholder images if cameras not available
+         if "rgb_table" not in obs:
+@@ -321,10 +338,37 @@ class IsaacLabEnvWrapper:
+         ], axis=-1)
+         
+         return force_grid.astype(np.float32)
++
++    def _read_joint_torque(self) -> np.ndarray:
++        robot = self.env.scene["robot"]
++        torque = getattr(robot.data, "applied_torque", None)
++        if torque is None:
++            torque = getattr(robot.data, "joint_effort", None)
++        if torque is None:
++            raise AttributeError("robot.data has neither applied_torque nor joint_effort")
++        return torque[0].detach().cpu().numpy().astype(np.float32)
++
++    def _append_current_gripper_torque(self) -> None:
++        torque = self._read_joint_torque()
++        if torque.shape[0] < 2:
++            raise ValueError(f"Expected at least two gripper joints, got torque shape {torque.shape}")
++        value = np.array([float(torque[-2:].mean())], dtype=np.float32)
++        self._gripper_torque_history.append(value)
++        self._gripper_torque_history = self._gripper_torque_history[-self.torque_window_size :]
++
++    def _get_padded_gripper_torque_window(self) -> np.ndarray:
++        if not self._gripper_torque_history:
++            raise RuntimeError("Torque history is empty")
++        history = np.stack(self._gripper_torque_history, axis=0).astype(np.float32)
++        pad_count = self.torque_window_size - history.shape[0]
++        if pad_count > 0:
++            history = np.concatenate([np.repeat(history[:1], pad_count, axis=0), history], axis=0)
++        return history
+     
+     def reset(self, seed: int | None = None) -> dict:
+         """Reset environment and return observation."""
+         self._step_count = 0
++        self._gripper_torque_history = []
+         
+         # Reset the environment
+         if seed is not None:
+@@ -621,6 +665,8 @@ def main():
+         img_height=args_cli.img_height,
+         img_width=args_cli.img_width,
+         background_texture=args_cli.background_texture,
++        send_gripper_torque_window=args_cli.send_gripper_torque_window,
++        torque_window_size=args_cli.torque_window_size,
+     )
+     
+     # Start server
+diff --git a/source/isaaclab/isaaclab/sim/simulation_context.py b/source/isaaclab/isaaclab/sim/simulation_context.py
+index fbd7f004..aebd6b7d 100644
+--- a/source/isaaclab/isaaclab/sim/simulation_context.py
++++ b/source/isaaclab/isaaclab/sim/simulation_context.py
+@@ -207,10 +207,15 @@ class SimulationContext(_SimulationContext):
+         # check the case where we don't need to render the viewport
+         # since render_viewport can only be False in headless mode, we only need to check for offscreen_render
+         if not self._render_viewport and self._offscreen_render:
+-            # disable the viewport if offscreen_render is enabled
++            # Disable the viewport if offscreen_render is enabled. In truly headless
++            # AutoDL runs, omni.kit.viewport.window is intentionally not loaded to
++            # avoid a segfault in omni.kit.widget.viewport during stage open; in
++            # that case get_active_viewport() returns None, which is safe to skip.
+             from omni.kit.viewport.utility import get_active_viewport
+ 
+-            get_active_viewport().updates_enabled = False
++            active_viewport = get_active_viewport()
++            if active_viewport is not None:
++                active_viewport.updates_enabled = False
+ 
+         # override enable scene querying if rendering is enabled
+         # this is needed for some GUI features
