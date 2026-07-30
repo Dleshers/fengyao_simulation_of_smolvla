@@ -44,7 +44,9 @@ esac
 
 DATASET_ROOT="${DATASET_ROOT:-$RUNTIME_ROOT/persistent/lerobot_datasets/$DATASET_REPO_ID}"
 PRETRAINED_POLICY="${PRETRAINED_POLICY:-$RUNTIME_ROOT/pretrained/official_smolvla_base}"
-TORQUE_LSTM_WEIGHTS="${TORQUE_LSTM_WEIGHTS:-$REPO_ROOT/trained_lstm_weights/torque_16d_encoder.pt}"
+TORQUE_LSTM_WEIGHTS="${TORQUE_LSTM_WEIGHTS:-}"
+TORQUE_INPUT_DIM="${TORQUE_INPUT_DIM:-1}"
+TRAIN_TORQUE_LSTM="${TRAIN_TORQUE_LSTM:-false}"
 
 OUTPUT_ROOT="${OUTPUT_ROOT:-$RUNTIME_ROOT/persistent/gripper_lstm_experiments}"
 RUN_NAME="${RUN_NAME:-peg_insert_preinsert_${ARM}_mvp_smoke_steps${STEPS:-100}_seed${SEED:-1000}_20260710}"
@@ -92,7 +94,7 @@ if [[ ! -f "$PRETRAINED_POLICY/model.safetensors" ]]; then
   echo "Official pretrained model missing: $PRETRAINED_POLICY/model.safetensors" >&2
   exit 2
 fi
-if [[ "$USE_TORQUE_LSTM" == "true" && ! -f "$TORQUE_LSTM_WEIGHTS" ]]; then
+if [[ "$USE_TORQUE_LSTM" == "true" && -n "$TORQUE_LSTM_WEIGHTS" && ! -f "$TORQUE_LSTM_WEIGHTS" ]]; then
   echo "Torque LSTM weights missing: $TORQUE_LSTM_WEIGHTS" >&2
   exit 2
 fi
@@ -107,6 +109,8 @@ echo "  dataset.repo_id:  $DATASET_REPO_ID"
 echo "  dataset.root:     $DATASET_ROOT"
 echo "  policy.path:      $PRETRAINED_POLICY"
 echo "  use_torque_lstm:  $USE_TORQUE_LSTM"
+  echo "  torque_input_dim: $TORQUE_INPUT_DIM"
+  echo "  train_torque_lstm: $TRAIN_TORQUE_LSTM"
 echo "  output_dir:       $OUTPUT_DIR"
 echo "  steps/save_freq:  $STEPS / $SAVE_FREQ"
 echo "  seed/batch:       $SEED / $BATCH_SIZE"
@@ -114,7 +118,7 @@ echo "  seed/batch:       $SEED / $BATCH_SIZE"
 "$LEROBOT_ENV/bin/python" "$REPO_ROOT/experiment/audit_lerobot_dataset_features.py" \
   --repo-id "$DATASET_REPO_ID" \
   --root "$DATASET_ROOT" \
-  --state-dim "$STATE_DIM" --action-dim "$ACTION_DIM"
+  --state-dim "$STATE_DIM" --action-dim "$ACTION_DIM" --torque-dim "$TORQUE_INPUT_DIM"
 
 cd "$LEROBOT_ROOT"
 
@@ -142,12 +146,12 @@ if [[ "$USE_TORQUE_LSTM" == "true" ]]; then
     --policy.use_torque_lstm=true \
     --policy.torque_window_key=observation.gripper_torque \
     --policy.torque_window_size=30 \
-    --policy.torque_input_dim=1 \
+    --policy.torque_input_dim="$TORQUE_INPUT_DIM" \
     --policy.torque_lstm_hidden_dim=32 \
     --policy.torque_lstm_output_dim=16 \
     --policy.torque_lstm_num_layers=1 \
     --policy.torque_lstm_weights_path="$TORQUE_LSTM_WEIGHTS" \
-    --policy.train_torque_lstm=false 2>&1 \
+    --policy.train_torque_lstm="$TRAIN_TORQUE_LSTM" 2>&1 \
     | tee "$RUNTIME_ROOT/persistent/logs/${RUN_NAME}.log"
 else
   "$LEROBOT_ENV/bin/lerobot-train" \

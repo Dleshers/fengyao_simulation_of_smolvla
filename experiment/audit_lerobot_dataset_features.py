@@ -20,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--state-dim", type=int, default=49)
     parser.add_argument("--action-dim", type=int, default=7)
+    parser.add_argument("--torque-dim", type=int, default=1)
     parser.add_argument("--max-frames", type=int, default=0, help="0 means all frames.")
     return parser.parse_args()
 
@@ -37,7 +38,7 @@ def main() -> None:
         "action": (args.action_dim,),
         "observation.images.camera1": (3, 224, 224),
         "observation.images.camera2": (3, 224, 224),
-        "observation.gripper_torque": (30, 1),
+        "observation.gripper_torque": (30, args.torque_dim),
     }
     for key, shape in expected.items():
         actual = tuple(first[key].shape)
@@ -45,7 +46,7 @@ def main() -> None:
             raise AssertionError(f"{key}: expected {shape}, got {actual}")
 
     torques = torch.stack([ds[i]["observation.gripper_torque"].float() for i in range(n)])
-    newest = torques[:, -1, 0]
+    newest = torques[:, -1, :]
     print(f"repo_id={args.repo_id}")
     print(f"root={args.root}")
     print(f"episodes={ds.num_episodes} frames={ds.num_frames} audited_frames={n}")
