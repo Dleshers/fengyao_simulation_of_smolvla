@@ -15,6 +15,20 @@ CARD="$REPO_ROOT/dataset_cards/factory_peg_insert_conditional_recovery_v3_RAW_RE
 
 log() { echo "[$(date -Is)] [CONDITIONAL_V3_HF_UPLOAD] $*"; }
 trap 's=$?; log "FAILED status=$s line=$LINENO"; exit "$s"' ERR
+retry() {
+  local attempt=1 max_attempts=8 delay=30
+  until "$@"; do
+    if (( attempt >= max_attempts )); then
+      log "giving up after ${attempt}/${max_attempts}: $*"
+      return 1
+    fi
+    log "command failed; retry ${attempt}/${max_attempts} in ${delay}s: $*"
+    sleep "$delay"
+    attempt=$((attempt + 1))
+    delay=$((delay < 300 ? delay * 2 : 300))
+  done
+}
+
 
 log "waiting for collector pid=$COLLECTOR_PID"
 while kill -0 "$COLLECTOR_PID" 2>/dev/null; do sleep 60; done
@@ -35,7 +49,7 @@ with h5py.File(path, 'r') as f:
 print('[CONDITIONAL_V3_HF_UPLOAD] raw audit passed', flush=True)
 PY
 
-hf repos create "$HF_DATASET_ID" --type dataset --private --exist-ok
-hf upload-large-folder "$HF_DATASET_ID" "$RAW_DIR" --type dataset --num-workers 4
-hf upload "$HF_DATASET_ID" "$CARD" README.md --type dataset --commit-message "Add conditional recovery v3 dataset card"
+retry hf repos create "$HF_DATASET_ID" --type dataset --private --exist-ok
+retry hf upload-large-folder "$HF_DATASET_ID" "$RAW_DIR" --type dataset --num-workers 4
+retry hf upload "$HF_DATASET_ID" "$CARD" README.md --type dataset --commit-message "Add conditional recovery v3 dataset card"
 log "COMPLETE dataset=https://huggingface.co/datasets/$HF_DATASET_ID"
