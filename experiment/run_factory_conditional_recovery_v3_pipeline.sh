@@ -33,13 +33,18 @@ space_guard() {
 
 PHASE=collect
 space_guard
-log "collecting/resuming raw=$RAW"
-OMNI_KIT_ACCEPT_EULA=YES ACCEPT_EULA=Y TERM=xterm "$RUNTIME_ROOT/IsaacLab-Tactile/isaaclab.sh" -p \
-  "$REPO_ROOT/experiment/collect_factory_peg_insert_conditional_recovery.py" \
-  --dataset-file "$RAW" --normal-demos 100 --per-stratum 100 --max-attempts 2200 \
-  --normal-max-steps 480 --recovery-max-steps 220 --resolution 84 --seed 20260730 \
-  --headless --enable_cameras \
-  --experience "$RUNTIME_ROOT/IsaacLab-Tactile/apps/isaacsim_4_5/isaaclab.python.headless.rendering.nongx.kit"
+if [[ "${SKIP_COLLECTION:-0}" == "1" ]]; then
+  [[ -f "$RAW" ]] || { log "SKIP_COLLECTION=1 but raw file is absent: $RAW"; exit 2; }
+  log "SKIP_COLLECTION=1; using transferred raw=$RAW"
+else
+  log "collecting/resuming raw=$RAW"
+  OMNI_KIT_ACCEPT_EULA=YES ACCEPT_EULA=Y TERM=xterm "$RUNTIME_ROOT/IsaacLab-Tactile/isaaclab.sh" -p \
+    "$REPO_ROOT/experiment/collect_factory_peg_insert_conditional_recovery.py" \
+    --dataset-file "$RAW" --normal-demos 100 --per-stratum 100 --max-attempts 2200 \
+    --normal-max-steps 480 --recovery-max-steps 220 --resolution 84 --seed 20260730 \
+    --headless --enable_cameras \
+    --experience "$RUNTIME_ROOT/IsaacLab-Tactile/apps/isaacsim_4_5/isaaclab.python.headless.rendering.nongx.kit"
+fi
 
 PHASE=raw_audit
 space_guard
@@ -77,6 +82,11 @@ with h5py.File(path, 'r') as f:
     assert recovery_frames > frames // 2, (recovery_frames, frames)
     print('[CONDITIONAL_V3_RAW_AUDIT]', {'demos': len(demos), 'counts': counts, 'frames': frames, 'recovery_frames': recovery_frames}, flush=True)
 PY
+
+if [[ "${STOP_AFTER_RAW:-0}" == "1" ]]; then
+  log "STOP_AFTER_RAW=1; raw collection/audit complete, not converting or training locally"
+  exit 0
+fi
 
 PHASE=convert_and_dataset_audit
 for mode in original zero shuffle_episode; do
@@ -121,6 +131,11 @@ for arm in visual torque zero shuffle; do
   log "training finished arm=$arm"
 done
 
+if [[ "${SKIP_EVALUATION:-0}" == "1" ]]; then
+  log "SKIP_EVALUATION=1; four-arm training complete, no local Isaac Sim evaluation requested"
+  exit 0
+fi
+
 PHASE=matched_evaluation
 space_guard
 for arm in visual torque zero shuffle; do
@@ -159,4 +174,9 @@ lines += [f'| {n} | {v} | {a:.3f} | {r:.3f} |' for n,v,a,r in rows]
 (root/'REPORT.md').write_text('\n'.join(lines)+'\n')
 print('[CONDITIONAL_V3_REPORT]', root/'REPORT.md', flush=True)
 PY
+
+if [[ "${STOP_AFTER_RAW:-0}" == "1" ]]; then
+  log "STOP_AFTER_RAW=1; raw collection/audit complete, not converting or training locally"
+  exit 0
+fi
 log "COMPLETE collection_conversion_four_arm_training_and_matched_evaluation"
