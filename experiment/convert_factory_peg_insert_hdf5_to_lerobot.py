@@ -19,16 +19,16 @@ def history(x,t,n=30):
     return y.astype(np.float32)
 p=argparse.ArgumentParser()
 p.add_argument('--input',type=Path,required=True); p.add_argument('--output-dir',type=Path,required=True); p.add_argument('--repo-id',required=True)
-p.add_argument('--torque-control',choices=('original','zero','shuffle_episode'),default='original'); p.add_argument('--seed',type=int,default=1000); p.add_argument('--fps',type=int,default=15); p.add_argument('--use-videos',action='store_true')
+p.add_argument('--torque-control',choices=('original','zero','shuffle_episode','shuffle_causal'),default='original'); p.add_argument('--seed',type=int,default=1000); p.add_argument('--fps',type=int,default=15); p.add_argument('--use-videos',action='store_true')
 p.add_argument('--torque-dim',choices=(1,7),type=int,default=1,help='1 keeps the historical torque norm; 7 preserves signed joint-torque directions.')
-p.add_argument('--recovery-repeat',type=int,default=1,help='Repeat each conditional-recovery episode this many times when materializing the dataset.')
+p.add_argument('--recovery-repeat',type=int,default=1,help='Repeat each conditional-recovery episode this many times when materializing the dataset.'); p.add_argument('--policy-label-only',action='store_true',help='For contact-recovery raw HDF5, retain history but add only post-contact recovery labels.')
 a=p.parse_args(); root=a.output_dir/a.repo_id
 if root.exists(): raise FileExistsError(root)
 if a.recovery_repeat < 1: p.error('--recovery-repeat must be >=1')
 features={'observation.state':{'dtype':'float32','shape':(12,),'names':None},'action':{'dtype':'float32','shape':(6,),'names':None},'observation.images.camera1':{'dtype':'image','shape':(3,224,224),'names':['channels','height','width']},'observation.images.camera2':{'dtype':'image','shape':(3,224,224),'names':['channels','height','width']},'observation.gripper_torque':{'dtype':'float32','shape':(30,a.torque_dim),'names':None}}
 ds=LeRobotDataset.create(repo_id=a.repo_id,root=root,fps=a.fps,features=features,robot_type='isaaclab_factory_franka',use_videos=a.use_videos)
 with h5py.File(a.input,'r') as f:
-    if f.attrs.get('format','') not in ('factory_peg_insert_formal_v1','factory_peg_insert_causal_recovery_v2','factory_peg_insert_conditional_recovery_v3'): raise ValueError('unexpected raw format')
+    if f.attrs.get('format','') not in ('factory_peg_insert_formal_v1','factory_peg_insert_causal_recovery_v2','factory_peg_insert_conditional_recovery_v3','factory_peg_insert_visual_oneway_v2','factory_peg_insert_contact_recovery_native_v1'): raise ValueError('unexpected raw format')
     demos=sorted(f['demos']); print(f'[FACTORY_CONVERT] demos={len(demos)} control={a.torque_control}',flush=True)
     if not demos: raise ValueError('no demos')
     for i,name in enumerate(demos):
@@ -45,7 +45,20 @@ with h5py.File(a.input,'r') as f:
         repeats=a.recovery_repeat if bool(g.attrs.get('recovery_episode',False)) else 1
         print(f'[FACTORY_CONVERT] {i+1}/{len(demos)} {name} frames={len(state)} repeats={repeats}',flush=True)
         for _ in range(repeats):
+            frames = 0
             for t in range(len(state)):
-                ds.add_frame({'task':'Insert the peg into the hole','observation.state':state[t],'action':act[t],'observation.images.camera1':image(g['rgb_table'][t]),'observation.images.camera2':image(g['rgb_side'][t]),'observation.gripper_torque':history(torque,t)})
-            ds.save_episode()
+                torque_window=history(torque,t)
+                if a.torque_control=="shuffle_causal":
+                    prefix=torque[:t+1]
+                    rng=np.random.default_rng(a.seed + i * 1000003 + t)
+                    if len(prefix) >= 30:
+                        torque_window=prefix[rng.choice(len(prefix), size=30, replace=False)]
+                    else:
+                        torque_window=prefix[rng.choice(len(prefix), size=30, replace=True)]
+                if a.policy_label_only and "is_policy_label" in g and not bool(g["is_policy_label"][t, 0]):
+                    continue
+                ds.add_frame({"task":"Insert the peg into the hole","observation.state":state[t],"action":act[t],"observation.images.camera1":image(g["rgb_table"][t]),"observation.images.camera2":image(g["rgb_side"][t]),"observation.gripper_torque":torque_window})
+                frames += 1
+            if frames:
+                ds.save_episode()
 ds.finalize(); print(f'[FACTORY_CONVERT] complete root={root}',flush=True)
