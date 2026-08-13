@@ -112,6 +112,30 @@ PYTHONPATH="$LEROBOT_ROOT/src" "$ISAAC_PY" -m pytest -q \
 分别按横向初始误差、接触/非接触初始化、sector、是否先进入近孔区域分层，报告：strict insertion success、alignment recovery、contact-to-success recovery、首次接触后成功率、夹持漂移、完成步数，以及逐 seed 的 visual/torque 配对结果。只有在视觉组已可靠进入近孔区域、且两组共同失败不再由定位或执行错误主导时，才可把 torque-original 的配对增益解释为触觉带来的恢复收益。
 
 
+## 2026-08-13 5k gate common-failure correction
+
+The downloaded padfix 5k checkpoints passed loading and padding plumbing, but
+both arms still fail the current-action recovery gate. Exact replay excluded
+camera, state, torque-window, action-scale and controller mismatches. The
+legacy balanced64 labels contain a fixed-timer phase-4 prefix that is not
+observable by the policy; useful recenter corrections occur mainly later in
+the 50-step action chunk. Do not change formal evaluation away from
+`n_action_steps=1` and do not warm-start from these checkpoints.
+
+For a corrected short retraining gate, convert the contact HDF5 with
+`--policy-label-only --policy-phase-min 5 --torque-dim 7`. The resulting local
+audit set has 64 episodes and 2,390 frames; 64/64 first XY labels point toward
+the hole centre (mean cosine 0.9976, minimum 0.9683). Before closed-loop
+evaluation, run `experiment/audit_native_contact_action_chunks.py` and require
+reliable first-action direction. Full evidence and thresholds are in
+`experiment_results/COMMON_FAILURE_ROOT_CAUSE_AND_FIX_20260813.md`.
+
+Phase-5 exact-frame audit confirms that the old weights remain underfit after
+removing the timer ambiguity: visual is 6/8 sectors at mean cosine 0.392,
+while torque-original is 5/8 at mean 0.296. Both arms must therefore restart
+from the common base on the corrected labels; do not reuse either 5k
+checkpoint.
+
 ## 2026-08-13 v4 正式因果实验：本节覆盖本文此前的正式训练安排
 
 完整规范见同目录的 [`CONTACT_RECOVERY_V4_DATASET_DESIGN.md`](CONTACT_RECOVERY_V4_DATASET_DESIGN.md)。A100 agent 必须先阅读该文件；它是验证“触觉时序信息具有正向作用”的正式实验设计，而不是可选参考。

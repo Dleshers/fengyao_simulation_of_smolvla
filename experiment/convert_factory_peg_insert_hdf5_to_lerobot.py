@@ -22,9 +22,11 @@ p.add_argument('--input',type=Path,required=True); p.add_argument('--output-dir'
 p.add_argument('--torque-control',choices=('original','zero','shuffle_episode','shuffle_causal'),default='original'); p.add_argument('--seed',type=int,default=1000); p.add_argument('--fps',type=int,default=15); p.add_argument('--use-videos',action='store_true')
 p.add_argument('--torque-dim',choices=(1,7),type=int,default=1,help='1 keeps the historical torque norm; 7 preserves signed joint-torque directions.')
 p.add_argument('--recovery-repeat',type=int,default=1,help='Repeat each conditional-recovery episode this many times when materializing the dataset.'); p.add_argument('--policy-label-only',action='store_true',help='For contact-recovery raw HDF5, retain history but add only post-contact recovery labels.')
+p.add_argument('--policy-phase-min',type=int,default=None,help='For phase-annotated recovery data, retain policy labels only at or after this phase (e.g. 5 skips the fixed-timer unload prefix).')
 a=p.parse_args(); root=a.output_dir/a.repo_id
 if root.exists(): raise FileExistsError(root)
 if a.recovery_repeat < 1: p.error('--recovery-repeat must be >=1')
+if a.policy_phase_min is not None and a.policy_phase_min < 0: p.error('--policy-phase-min must be non-negative')
 features={'observation.state':{'dtype':'float32','shape':(12,),'names':None},'action':{'dtype':'float32','shape':(6,),'names':None},'observation.images.camera1':{'dtype':'image','shape':(3,224,224),'names':['channels','height','width']},'observation.images.camera2':{'dtype':'image','shape':(3,224,224),'names':['channels','height','width']},'observation.gripper_torque':{'dtype':'float32','shape':(30,a.torque_dim),'names':None}}
 ds=LeRobotDataset.create(repo_id=a.repo_id,root=root,fps=a.fps,features=features,robot_type='isaaclab_factory_franka',use_videos=a.use_videos)
 with h5py.File(a.input,'r') as f:
@@ -56,6 +58,8 @@ with h5py.File(a.input,'r') as f:
                     else:
                         torque_window=prefix[rng.choice(len(prefix), size=30, replace=True)]
                 if a.policy_label_only and "is_policy_label" in g and not bool(g["is_policy_label"][t, 0]):
+                    continue
+                if a.policy_phase_min is not None and "phase" in g and int(g["phase"][t, 0]) < a.policy_phase_min:
                     continue
                 ds.add_frame({"task":"Insert the peg into the hole","observation.state":state[t],"action":act[t],"observation.images.camera1":image(g["rgb_table"][t]),"observation.images.camera2":image(g["rgb_side"][t]),"observation.gripper_torque":torque_window})
                 frames += 1
