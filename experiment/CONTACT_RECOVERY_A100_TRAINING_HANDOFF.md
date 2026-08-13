@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-**可开始首轮训练。** 最终接触恢复集已平衡为 8 个方向各 8 条，并通过物理质量审计。必须使用下方指定的最终文件与 SHA-256。
+**旧权重的首次训练已完成，但不得继续在旧权重上微调或据其得出触觉结论。** 2026-08-13 已确认 LeRobot/SmolVLA 的 action padding 键与数据集键不匹配；A100 必须按下方“强制更新”从官方底座重新训练 visual 与 torque-original 两组。最终接触恢复集已平衡为 8 个方向各 8 条，并通过物理质量审计。必须使用下方指定的最终文件与 SHA-256。
 
 ## 目的
 
@@ -57,3 +57,56 @@ $ISAAC_PY experiment/audit_factory_peg_insert_contact_recovery_native_v1.py --in
 ## 评估规则
 
 在未见轨迹、固定的近孔阻挡初始状态上同时报告严格恢复率、重对齐率、夹持漂移、时间到成功。视觉组必须先有有效粗定位；否则不得把力矩组差异解释为触觉收益。
+
+## 2026-08-13 强制更新：修复后重训要求（以本节为准）
+
+### 已确认的问题与边界
+
+- 已评估的旧 visual / torque-original checkpoint 是**诊断基线**，不是最终可比较模型：其训练时 SmolVLA 读取了不存在的 `actions_id_pad`，而数据集实际提供的是 `action_is_pad`。在 `chunk_size=50` 下，padding 动作会错误参与损失（视觉原始集约 17.93%，接触恢复标签序列约 47.69%），足以同时损害两组闭环行为。
+- 仿真评估器也已修正：闭环执行必须使用 `--n-action-steps 1`，每一步重新观察 RGB 与力矩；不得使用 checkpoint 中遗留的 `n_action_steps=50`。该错误会令两组连续执行 50 个过期动作。
+- 这两个共同因素已能解释旧评估的低共同成功率。因此在修复后两组的配对、分层评估完成前，**不得声称触觉无效或有效**。
+
+### 固定代码版本与预检
+
+```bash
+git fetch origin main
+git checkout b02652dc972005ea972041a71fdb6105dfd3b039
+
+# 将仓库中已修复的 override 安装到实际训练环境；LEROBOT_ROOT 是该环境的 lerobot 源码根目录。
+cp remote_handoff_gripper_lstm/lerobot_overrides/modeling_smolvla.py \
+   "$LEROBOT_ROOT/src/lerobot/policies/smolvla/modeling_smolvla.py"
+grep -n 'actions_is_pad = batch.get' "$LEROBOT_ROOT/src/lerobot/policies/smolvla/modeling_smolvla.py"
+```
+
+上面最后一行必须显示 `batch.get("action_is_pad")`。训练启动前还必须通过仓库回归测试（按实际环境设置 `ISAAC_PY`）：
+
+```bash
+PYTHONPATH="$LEROBOT_ROOT/src" "$ISAAC_PY" -m pytest -q \
+  remote_handoff_gripper_lstm/lerobot_overrides/test_smolvla_torque_lstm.py
+```
+
+### 不可变的数据划分
+
+先下载并校验上文两个原始 HDF5；之后**先生成并保存** `TRAIN_SPLIT_MANIFEST.json`，再物化 train HDF5 和转换数据。禁止对完整 120+64 条数据直接转换后随机按帧划分。
+
+| 数据来源 | train | holdout | 划分约束 |
+| --- | ---: | ---: | --- |
+| visual_oneway_v2 | 100 demos | 20 demos | 按 demo 划分，固定随机种子 |
+| contact_recovery_native_v1_balanced64 | 56 demos | 8 demos | 按 `pair_id` 分组；同一 pair 不可跨 split；holdout 覆盖 8 个扇区 |
+
+清单至少应记录：Git commit、两个源文件 SHA-256、每条 demo 名称、来源（visual/contact）、contact 的 `pair_id` 与 sector、split、帧数、转换参数及随机种子。两个训练臂必须读取**同一份 train manifest**；所有最终评估仅读取 holdout manifest 和明确列出的未见随机种子。
+
+### 训练顺序与公平性
+
+1. 仅从相同官方 SmolVLA base 新建两个 run：`visual` 和 `torque-original`；禁止从旧 checkpoint 续训，也禁止把 `trained_lstm_weights/torque_16d_encoder.pt` 加载进 7D 分支。
+2. 两组使用相同 train manifest、样本/数据顺序种子、batch size、optimizer、学习率计划、总步数、checkpoint 选择准则和 RGB/proprioception 预处理。唯一差异是 torque-original 接收连续 **30×7 signed joint torque** 及其新初始化的 LSTM。
+3. contact 数据转换仍必须使用 `--policy-label-only --torque-dim 7`；保留接触前 30 帧真实历史，但仅对 `is_policy_label=true` 的恢复帧监督动作。
+4. 先各跑一个短门禁 run（建议 5k steps），确认训练/验证 loss 正常、padding loss 为零且能加载推理；通过后再从官方 base 各自完整训练（建议至少 20k steps，并按验证集选择 checkpoint）。不要把短 run checkpoint 用作正式结果。
+
+每个 run 应上传 `config.json`、训练命令、commit、manifest 副本、所有 checkpoint、train/valid metrics、随机种子和环境包版本到 Hugging Face；Git 仅提交小型代码、清单和报告，不提交 HDF5 或大权重。
+
+### 修复后的评估门禁
+
+评估环境必须使用本仓库修复后的 `experiment/eval_factory_peg_insert_native_contact_takeover.py`，显式传入 `--n-action-steps 1` 和固定 seed；先做 8 个配对 holdout 冒烟回合（同一初始状态分别跑 visual 与 torque-original），再做每组至少 32 个配对回合。
+
+分别按横向初始误差、接触/非接触初始化、sector、是否先进入近孔区域分层，报告：strict insertion success、alignment recovery、contact-to-success recovery、首次接触后成功率、夹持漂移、完成步数，以及逐 seed 的 visual/torque 配对结果。只有在视觉组已可靠进入近孔区域、且两组共同失败不再由定位或执行错误主导时，才可把 torque-original 的配对增益解释为触觉带来的恢复收益。
