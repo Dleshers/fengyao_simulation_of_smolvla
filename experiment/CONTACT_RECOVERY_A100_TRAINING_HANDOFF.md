@@ -244,3 +244,22 @@ COMMON_ARGS=(
 5. torque 对 zero/shuffle 无差异：返回 v4 Gate C 修改接触载荷与观测设计，不进入正式长训。
 
 所有 checkpoint、`train_config.json`、逐 step loss、32 样本离线 JSON、2+2 闭环 JSON、Git commit 和测试日志上传到 Hugging Face。
+
+## 2026-08-14 5k 评估后的最新入口（覆盖上节后续训练决策）
+
+A100 端在采取任何训练动作前，必须继续阅读：
+
+- [REACTIVE_PHASE5_10K_TRAINING_HANDOFF_20260814.md](REACTIVE_PHASE5_10K_TRAINING_HANDOFF_20260814.md)：下一轮数据补充、2k/10k 门控、正式延长条件；
+- [REACTIVE_PHASE5_FIRSTSTEPW5_5K_VALIDATION_20260814.md](../experiment_results/REACTIVE_PHASE5_FIRSTSTEPW5_5K_VALIDATION_20260814.md)：本轮 2k/5k 权重的分层与反事实证据。
+
+本轮 5k 已确认首动作损失修复有效，并确认原始 30×7 时序力矩在 1–2.5 mm 区间提供因果纠偏信号；但 `<1 mm` 仍存在过大横向动作和孔口振荡，因此当前权重只通过表示门禁，未通过严格插入门禁。不得直接续训旧 5k，也不得据此宣称触觉提升闭环成功率。
+
+下一步固定顺序为：
+
+1. 按最新文档补充 5k 策略实际访问的 1–2.5 mm 和 0.2–1 mm 失败状态恢复轨迹，并完成按 `pair_id` 的数据审计；
+2. visual 与 torque-original 从同一官方 base、同一 manifest、`seed=1000`、`action_loss_first_step_weight=5.0` 重新训练 2k 冒烟；
+3. 冒烟通过后重启共同 10k 决策训练，保存 2k/5k/8k/10k；
+4. 使用 `eval_factory_peg_insert_same_state_pair.py` 在同一 Isaac 进程中从同一快照分叉评估；独立进程即使 seed 相同也不得视为配对样本；
+5. 只有 10k 离线分层和同快照闭环门控均通过，才允许共同延长到 20k，并按验证曲线决定是否接近 50k。
+
+phase-5 权重的评估必须使用 `--pre-takeover-unload-steps 15`。visual 与 torque 的采样平均、动作裁剪、初始状态清单和分支步数必须完全相同；裁剪结果只作敏感性分析，正式报告同时给出未裁剪结果。

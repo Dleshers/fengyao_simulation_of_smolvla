@@ -23,6 +23,8 @@ p.add_argument("--repo-id", required=True)
 p.add_argument("--output", type=Path, required=True)
 p.add_argument("--demos-per-sector", type=int, default=1)
 p.add_argument("--phase-min", type=int, default=None, help="Select the first policy-labelled frame at or after this audit phase.")
+p.add_argument("--xy-min-m", type=float, default=None, help="Optional lower bound on audit XY error.")
+p.add_argument("--xy-max-m", type=float, default=None, help="Optional exclusive upper bound on audit XY error.")
 p.add_argument("--seed", type=int, default=20260813)
 a = p.parse_args()
 
@@ -76,6 +78,12 @@ with h5py.File(a.hdf5, "r") as f:
         labels = np.asarray(g["is_policy_label"]).reshape(-1).astype(bool)
         if a.phase_min is not None and "phase" in g:
             labels &= np.asarray(g["phase"]).reshape(-1) >= a.phase_min
+        if a.xy_min_m is not None:
+            labels &= np.asarray(g["audit_xy_error_m"]).reshape(-1) >= a.xy_min_m
+        if a.xy_max_m is not None:
+            labels &= np.asarray(g["audit_xy_error_m"]).reshape(-1) < a.xy_max_m
+        if not np.any(labels):
+            continue
         first = int(np.flatnonzero(labels)[0])
         selected.append((name, first))
         counts[sector] = counts.get(sector, 0) + 1
@@ -110,6 +118,8 @@ with h5py.File(a.hdf5, "r") as f:
                 "demo": name,
                 "sector": int(g.attrs["direction_sector"]),
                 "frame": t,
+                "xy_error_m": float(np.asarray(g["audit_xy_error_m"][t]).reshape(-1)[0]),
+                "depth_m": float(np.asarray(g["audit_depth_m"][t]).reshape(-1)[0]),
                 "valid_chunk_steps": len(oracle),
                 "first_predicted_action": pred[0].tolist(),
                 "first_oracle_action": oracle[0].tolist(),
