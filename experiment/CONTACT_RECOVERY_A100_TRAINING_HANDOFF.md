@@ -110,3 +110,29 @@ PYTHONPATH="$LEROBOT_ROOT/src" "$ISAAC_PY" -m pytest -q \
 评估环境必须使用本仓库修复后的 `experiment/eval_factory_peg_insert_native_contact_takeover.py`，显式传入 `--n-action-steps 1` 和固定 seed；先做 8 个配对 holdout 冒烟回合（同一初始状态分别跑 visual 与 torque-original），再做每组至少 32 个配对回合。
 
 分别按横向初始误差、接触/非接触初始化、sector、是否先进入近孔区域分层，报告：strict insertion success、alignment recovery、contact-to-success recovery、首次接触后成功率、夹持漂移、完成步数，以及逐 seed 的 visual/torque 配对结果。只有在视觉组已可靠进入近孔区域、且两组共同失败不再由定位或执行错误主导时，才可把 torque-original 的配对增益解释为触觉带来的恢复收益。
+
+
+## 2026-08-13 v4 正式因果实验：本节覆盖本文此前的正式训练安排
+
+完整规范见同目录的 [`CONTACT_RECOVERY_V4_DATASET_DESIGN.md`](CONTACT_RECOVERY_V4_DATASET_DESIGN.md)。A100 agent 必须先阅读该文件；它是验证“触觉时序信息具有正向作用”的正式实验设计，而不是可选参考。
+
+### 当前允许与禁止事项
+
+- `contact_recovery_native_v1_balanced64` 以及本文此前的 120+64 数据，只允许用于安装验证、转换审计、`action_is_pad` 修复验证和至多 5k/2k 步的管线门禁；**不得**将其完整训练结果作为正式触觉结论。
+- 在 v4 的 Gate A--D 通过、正式数据及其哈希/manifest 上传到 Hub 前，A100 不得发起正式 visual / torque-original 长训，也不得用旧 checkpoint 续训。
+- v4 正式训练数据到位后，旧的“visual 100/20、contact 56/8”划分不再适用；必须按 v4 的 `pair_id` manifest 划分，并保留独立、从未参与训练或模型选择的 120-state 配对评估 manifest。
+
+### A100 的正式前置门禁
+
+1. 按本文“固定代码版本与预检”安装 `action_is_pad` 修复，并通过回归测试；评估器固定 `--n-action-steps 1`。
+2. 在 v4 Gate A 中完成物理接触几何/载荷校准；Gate B 的 64 条 smoke 数据须覆盖 8 方向 × 2 偏差带 × 2 载荷带 × 2 重复。
+3. Gate C 必须先以按 `pair_id` 分组的轻量 probe 证明：30×7 原始力矩能预测纠偏方向，而冻结接触 RGB + proprioception 不足以提供同等信息；不满足阈值时先修数据生成器，不能靠增加训练步数解决。
+4. Gate D 仅训练 torque 组 2k 步，确认 original torque 相对 zero/causal-shuffle 会改变纠偏动作且闭环不系统性弹出；通过后才开始 Gate E 正式数据采集与训练。
+
+### v4 正式训练和结论要求
+
+- 正式集为 320 条接触恢复轨迹 + 80 条常规严格插入轨迹；接触后因果训练视图使用冻结的接触 RGB，但原始 HDF5 同时保留 live RGB 供部署视图后续验证。
+- policy 输入仅可含 RGB、12D proprioception 和可选 30×7 signed torque window；peg/hole 真值、接触标签、恢复阶段和 oracle 信息仅作审计元数据，绝不能输入模型。
+- visual 与 torque-original 必须从相同修复后的官方 base 启动，使用同一 manifest、采样/训练种子、优化器和 checkpoint 选择标准；唯一变量是原始力矩 LSTM suffix token。
+- 所有模型在同一 120 个保存初始状态上配对评估：visual、torque-original、同一 torque checkpoint 的 zero torque 与 causal-shuffle torque。结论同时报告严格恢复、重对齐、弹出/夹持漂移与时间到成功。
+- 只有 original torque 同时优于 zero 和 causal-shuffle 至少 15 个百分点，两个配对 bootstrap 95% 区间均不跨零，并且增益覆盖两个偏差带及至少 6/8 方向，才可声称触觉带来正向恢复收益。
