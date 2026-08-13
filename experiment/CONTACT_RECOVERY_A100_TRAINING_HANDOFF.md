@@ -70,7 +70,7 @@ $ISAAC_PY experiment/audit_factory_peg_insert_contact_recovery_native_v1.py --in
 
 ```bash
 git fetch origin main
-git checkout b02652dc972005ea972041a71fdb6105dfd3b039
+git checkout main  # 当前交接文档及 padding/评估修复均在 main
 
 # 将仓库中已修复的 override 安装到实际训练环境；LEROBOT_ROOT 是该环境的 lerobot 源码根目录。
 cp remote_handoff_gripper_lstm/lerobot_overrides/modeling_smolvla.py \
