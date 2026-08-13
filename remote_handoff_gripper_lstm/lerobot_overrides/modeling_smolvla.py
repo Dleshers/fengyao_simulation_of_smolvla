@@ -94,6 +94,37 @@ class ActionSelectKwargs(TypedDict, total=False):
     execution_horizon: int | None
 
 
+def _reduce_action_losses(
+    losses: Tensor,
+    actions_is_pad: Tensor | None,
+    first_step_weight: float,
+    reduction: str = "mean",
+) -> Tensor:
+    """Reduce per-element action loss over valid steps with optional step-zero emphasis."""
+    if losses.ndim != 3:
+        raise ValueError(f"losses must have shape (batch, time, action_dim), got {tuple(losses.shape)}")
+    if reduction not in ("mean", "none"):
+        raise ValueError(f"Unsupported reduction: {reduction}")
+
+    batch_size, chunk_size, action_dim = losses.shape
+    if actions_is_pad is None:
+        valid = torch.ones((batch_size, chunk_size, 1), dtype=losses.dtype, device=losses.device)
+    else:
+        if actions_is_pad.shape != (batch_size, chunk_size):
+            raise ValueError(
+                "action_is_pad must match the batch and time dimensions of losses; "
+                f"got {tuple(actions_is_pad.shape)} versus {(batch_size, chunk_size)}"
+            )
+        valid = (~actions_is_pad.bool()).to(dtype=losses.dtype).unsqueeze(-1)
+
+    temporal = torch.ones((1, chunk_size, 1), dtype=losses.dtype, device=losses.device)
+    temporal[:, 0, :] = first_step_weight
+    weights = valid * temporal
+    denominator = (weights.sum(dim=(1, 2)) * action_dim).clamp_min(1.0)
+    per_sample = (losses * weights).sum(dim=(1, 2)) / denominator
+    return per_sample if reduction == "none" else per_sample.mean()
+
+
 def create_sinusoidal_pos_embedding(
     time: torch.tensor, dimension: int, min_period: float, max_period: float, device="cpu"
 ) -> Tensor:
@@ -439,18 +470,26 @@ class SmolVLAPolicy(PreTrainedPolicy):
 
         loss_dict["losses_after_forward"] = losses.clone()
 
-        if actions_is_pad is not None:
-            in_episode_bound = ~actions_is_pad
-            losses = losses * in_episode_bound.unsqueeze(-1)
-            loss_dict["losses_after_in_ep_bound"] = losses.clone()
-
-        # Remove padding
+        # Limit to the modeled action dimensions before constructing the loss mask.
         losses = losses[:, :, : self.config.max_action_dim]
         loss_dict["losses_after_rm_padding"] = losses.clone()
 
+        if actions_is_pad is not None:
+            in_episode_bound = ~actions_is_pad.bool()
+            loss_dict["losses_after_in_ep_bound"] = losses * in_episode_bound.unsqueeze(-1)
+
+        # Normalize by valid weighted elements rather than the fixed chunk size.
+        # This prevents short trajectories from receiving smaller gradients and
+        # lets one-step closed-loop policies explicitly emphasize chunk index 0.
+        per_sample_loss = _reduce_action_losses(
+            losses,
+            actions_is_pad,
+            self.config.action_loss_first_step_weight,
+            reduction="none",
+        )
+
         if reduction == "none":
             # Return per-sample losses (B,) by averaging over time and action dims
-            per_sample_loss = losses.mean(dim=(1, 2))
 
             # Add auxiliary losses if arm-hand enhancement is enabled
             if self.config.use_arm_hand_feature_enhancement:
@@ -466,7 +505,7 @@ class SmolVLAPolicy(PreTrainedPolicy):
             return per_sample_loss, loss_dict
         else:
             # Default: return scalar mean loss
-            loss_main = losses.mean()
+            loss_main = per_sample_loss.mean()
 
             # Add auxiliary losses if arm-hand enhancement is enabled
             if self.config.use_arm_hand_feature_enhancement:

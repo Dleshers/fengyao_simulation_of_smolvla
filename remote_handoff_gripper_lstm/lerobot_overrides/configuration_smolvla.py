@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -86,6 +88,10 @@ class SmolVLAConfig(PreTrainedConfig):
     scheduler_warmup_steps: int = 1_000
     scheduler_decay_steps: int = 30_000
     scheduler_decay_lr: float = 2.5e-6
+    # Weight applied to action-chunk position zero during behavior cloning.
+    # Keep 1.0 for legacy behavior. Closed-loop tasks that execute one action
+    # before replanning can increase this without changing inference semantics.
+    action_loss_first_step_weight: float = 1.0
 
     vlm_model_name: str = "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"  # Select the VLM backbone.
     load_vlm_weights: bool = False  # Set to True in case of training the expert from scratch. True when init from pretrained SmolVLA weights
@@ -182,6 +188,11 @@ class SmolVLAConfig(PreTrainedConfig):
             raise ValueError(
                 f"The chunk size is the upper bound for the number of action steps per model invocation. Got "
                 f"{self.n_action_steps} for `n_action_steps` and {self.chunk_size} for `chunk_size`."
+            )
+        if not math.isfinite(self.action_loss_first_step_weight) or self.action_loss_first_step_weight <= 0:
+            raise ValueError(
+                "action_loss_first_step_weight must be finite and > 0, got "
+                f"{self.action_loss_first_step_weight}."
             )
         if self.use_delta_joint_actions_aloha:
             raise NotImplementedError(

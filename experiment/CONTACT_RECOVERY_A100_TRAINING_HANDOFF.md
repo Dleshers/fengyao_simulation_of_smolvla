@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-**旧权重的首次训练已完成，但不得继续在旧权重上微调或据其得出触觉结论。** 2026-08-13 已确认 LeRobot/SmolVLA 的 action padding 键与数据集键不匹配；A100 必须按下方“强制更新”从官方底座重新训练 visual 与 torque-original 两组。最终接触恢复集已平衡为 8 个方向各 8 条，并通过物理质量审计。必须使用下方指定的最终文件与 SHA-256。
+**当前任务是使用修正后的 current-action loss 重新运行 5k 门禁，不是正式长训。** `contact_recovery_reactive_phase5_gate_20260813` 的旧损失权重已判定 no-go，禁止续训；`balanced64/reactive-phase5` 仅用于修复验证。A100 必须从相同 official SmolVLA base 分别重训 visual 与 torque-original，并以本文末尾“current-action loss 修复后的 A100 重训门禁”为最新执行规范。只有该门禁通过后，才允许使用 v4 的 320 条接触恢复 + 80 条常规插入数据进行正式训练。
 
 ## 目的
 
@@ -73,6 +73,8 @@ git fetch origin main
 git checkout main  # 当前交接文档及 padding/评估修复均在 main
 
 # 将仓库中已修复的 override 安装到实际训练环境；LEROBOT_ROOT 是该环境的 lerobot 源码根目录。
+cp remote_handoff_gripper_lstm/lerobot_overrides/configuration_smolvla.py \
+   "$LEROBOT_ROOT/src/lerobot/policies/smolvla/configuration_smolvla.py"
 cp remote_handoff_gripper_lstm/lerobot_overrides/modeling_smolvla.py \
    "$LEROBOT_ROOT/src/lerobot/policies/smolvla/modeling_smolvla.py"
 grep -n 'actions_is_pad = batch.get' "$LEROBOT_ROOT/src/lerobot/policies/smolvla/modeling_smolvla.py"
@@ -160,3 +162,85 @@ checkpoint.
 - visual 与 torque-original 必须从相同修复后的官方 base 启动，使用同一 manifest、采样/训练种子、优化器和 checkpoint 选择标准；唯一变量是原始力矩 LSTM suffix token。
 - 所有模型在同一 120 个保存初始状态上配对评估：visual、torque-original、同一 torque checkpoint 的 zero torque 与 causal-shuffle torque。结论同时报告严格恢复、重对齐、弹出/夹持漂移与时间到成功。
 - 只有 original torque 同时优于 zero 和 causal-shuffle 至少 15 个百分点，两个配对 bootstrap 95% 区间均不跨零，并且增益覆盖两个偏差带及至少 6/8 方向，才可声称触觉带来正向恢复收益。
+
+## 2026-08-13 current-action loss 修复后的 A100 重训门禁（最新执行要求）
+
+### 本轮决策
+
+`contact_recovery_reactive_phase5_gate_20260813` 的旧损失 5k 权重不得续训，也不得启动 v4 正式长训。32 条方向均衡离线审计中，visual 首动作平均 XY 余弦为 `0.341`（21/32 正向），torque-original 为 `0.146`（19/32 正向）；相同 seed 的原生物理接触闭环均为 0/2 对齐、0/2 严格插入，torque 两回合还出现越界。与此同时，24 状态反事实表明 original torque 平均纠偏余弦 `0.456`，zero 为 `-0.198`，causal-shuffle 为 `0.005`，说明 LSTM 已使用触觉，但首个闭环动作监督仍不足。
+
+### 代码修复
+
+SmolVLA 行为克隆损失现在具有两个明确性质：
+
+1. `action_is_pad=true` 的时间步不进入分子或分母；每个样本按其有效的加权动作元素归一化，短 chunk 不再因固定 50 步分母获得更小梯度。
+2. 配置项 `action_loss_first_step_weight` 对 chunk index 0 加权；默认 `1.0` 保持其他任务兼容，本门禁 visual 与 torque 均固定为 `5.0`。在 50 步完整 chunk 中，首动作占时间损失的比例由 2% 提升到约 9.26%，同时保留后续轨迹监督。
+
+A100 必须从本提交的 GitHub `main` 安装两份 override：
+
+```bash
+REPO=/path/to/fengyao_simulation_of_smolvla
+LEROBOT_ROOT=/path/to/lerobot-tactile
+PY=/path/to/python
+
+cp "$REPO/remote_handoff_gripper_lstm/lerobot_overrides/configuration_smolvla.py" \
+  "$LEROBOT_ROOT/src/lerobot/policies/smolvla/configuration_smolvla.py"
+cp "$REPO/remote_handoff_gripper_lstm/lerobot_overrides/modeling_smolvla.py" \
+  "$LEROBOT_ROOT/src/lerobot/policies/smolvla/modeling_smolvla.py"
+
+PYTHONPATH="$LEROBOT_ROOT/src" "$PY" -m pytest -q \
+  "$REPO/remote_handoff_gripper_lstm/lerobot_overrides/test_smolvla_torque_lstm.py"
+```
+
+预期结果为 `8 passed`。还必须保存以下审计输出：
+
+```bash
+grep -n "action_loss_first_step_weight" \
+  "$LEROBOT_ROOT/src/lerobot/policies/smolvla/"{configuration_smolvla.py,modeling_smolvla.py}
+git -C "$REPO" rev-parse HEAD
+```
+
+### 训练数据和初始化
+
+- 仅使用修正后的 `Dleshers/factory-peg-insert-contact-recovery-v1-7d-reactive-phase5-train` 门禁数据；其来源转换必须包含 `--policy-label-only --policy-phase-min 5 --torque-dim 7`。
+- 两组都从同一 padding-fixed official SmolVLA base **重新初始化**；不得从任何旧 5k 权重 resume。
+- 固定 `seed=1000`、`batch_size=32`、相同 sampler、optimizer、学习率计划、保存步和总步数。唯一模型差异仍是 torque-original 的 30x7 signed-torque LSTM。
+- 两组都显式传入 `--policy.action_loss_first_step_weight=5.0`。不得只给 torque 加权，否则对照不公平。
+
+训练命令沿用 A100 上一次成功运行的命令，只替换新的官方 base 输出目录并追加：
+
+```bash
+COMMON_ARGS=(
+  --dataset.repo_id=Dleshers/factory-peg-insert-contact-recovery-v1-7d-reactive-phase5-train
+  --batch_size=32
+  --steps=5000
+  --seed=1000
+  --policy.action_loss_first_step_weight=5.0
+)
+
+# visual：use_torque_lstm=false
+# torque-original：use_torque_lstm=true, torque_window_size=30,
+# torque_input_dim=7, torque_lstm_hidden_dim=32, torque_lstm_output_dim=16,
+# torque_lstm_num_layers=1, train_torque_lstm=true, torque_lstm_weights_path=""
+```
+
+在 step 2000 与 step 5000 都保存 checkpoint。此处 5k 仍只是门禁，不是正式结果；若 2k 已明显失败，也保留其指标以判断学习曲线，不得从旧 checkpoint 混接。
+
+### 强制评估与 go/no-go
+
+每个 2k/5k checkpoint 先运行 `experiment/audit_native_contact_action_chunks.py --phase-min 5 --demos-per-sector 4`，再以 `n_action_steps=1` 运行相同 seed 的 2+2 原生接触闭环。5k 只有同时满足以下条件才通过：
+
+- visual：8 方向中至少 6 个首动作方向为正，方向均衡 32 样本平均首动作 XY 余弦 >= `0.35`；
+- torque-original：至少 7/8 方向为正，32 样本平均首动作 XY 余弦 >= `0.55`；
+- 相同状态下 original torque 的纠偏方向同时优于 zero 和 causal-shuffle；
+- visual/torque 的 2+2 均无系统性弹出、负深度越界或夹持漂移，并至少表现出重对齐能力。
+
+判定顺序：
+
+1. 全部通过：才允许开始 v4 的 320 接触恢复 + 80 常规插入正式训练。
+2. visual 和 torque 都失败：继续检查共同训练目标、归一化或动作执行，不扩充数据。
+3. visual 通过但 torque 失败且反事实仍为正：先调整首动作权重（只可对两组一起改）或 torque 采样均衡，再做短门禁。
+4. 修复损失后仅固定 sector/载荷失败：才按失败 cell 定向补充配对轨迹；禁止无差别扩增同类数据。
+5. torque 对 zero/shuffle 无差异：返回 v4 Gate C 修改接触载荷与观测设计，不进入正式长训。
+
+所有 checkpoint、`train_config.json`、逐 step loss、32 样本离线 JSON、2+2 闭环 JSON、Git commit 和测试日志上传到 Hugging Face。
