@@ -404,7 +404,7 @@ class SmolVLAPolicy(PreTrainedPolicy):
         lang_tokens = batch[f"{OBS_LANGUAGE_TOKENS}"]
         lang_masks = batch[f"{OBS_LANGUAGE_ATTENTION_MASK}"]
         actions = self.prepare_action(batch)
-        actions_is_pad = batch.get("actions_id_pad")
+        actions_is_pad = batch.get("action_is_pad")
 
         # Prepare tactile data
         tactile_force_grid, tactile_resultant_force = self.prepare_tactile(batch)

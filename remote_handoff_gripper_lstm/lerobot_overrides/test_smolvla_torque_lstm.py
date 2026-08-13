@@ -1,9 +1,16 @@
+import inspect
 import pytest
 import torch
 
 from lerobot.configs.types import FeatureType, PolicyFeature
 from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
-from lerobot.policies.smolvla.modeling_smolvla import ForceLSTMEncoder
+from lerobot.policies.smolvla.modeling_smolvla import ForceLSTMEncoder, SmolVLAPolicy
+
+def test_smolvla_uses_lerobot_action_padding_key():
+    source = inspect.getsource(SmolVLAPolicy.forward)
+    assert 'batch.get("action_is_pad")' in source
+    assert 'actions_id_pad' not in source
+
 
 
 def test_force_lstm_encoder_shape_and_gradient():
