@@ -17,6 +17,8 @@ The 16 new episodes are balanced over 8 approach sectors and 2 contact-load band
 
 Do not train until both Hub repositories contain `completion.json`, the hard16 audit says `all_valid=true`, and the manifest hashes match the downloaded files.
 
+The producer defaults to local-only completion. Hub transfer is opt-in with `UPLOAD_HF=1` after explicit approval for these two repositories.
+
 ## Data contract
 
 The shared corpus contains 80 trajectories:

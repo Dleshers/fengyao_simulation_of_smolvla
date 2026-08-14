@@ -36,6 +36,7 @@ TARGET="${TARGET:-16}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-160}"
 SEED="${SEED:-20261814}"
 MIN_FREE_GIB="${MIN_FREE_GIB:-4}"
+UPLOAD_HF="${UPLOAD_HF:-0}"
 
 log() { echo "[$(date -Is)] [SUBMM_PIPELINE] $*"; }
 trap 'log "FAIL line=$LINENO status=$?"' ERR
@@ -124,6 +125,11 @@ output.write_text(json.dumps(payload, indent=2) + "\n")
 print(json.dumps(payload))
 PY
 cp "$UPLOAD_ROOT/completion.json" "$TRAIN_ROOT/completion.json"
+
+if [[ "$UPLOAD_HF" != "1" ]]; then
+  log "LOCAL_COMPLETE HF upload pending explicit approval; rerun with UPLOAD_HF=1 after approval"
+  exit 0
+fi
 
 log "create private HF dataset repositories"
 hf repos create "$RAW_REPO_ID" --repo-type dataset --private --exist-ok
