@@ -30,7 +30,7 @@ if a.policy_phase_min is not None and a.policy_phase_min < 0: p.error('--policy-
 features={'observation.state':{'dtype':'float32','shape':(12,),'names':None},'action':{'dtype':'float32','shape':(6,),'names':None},'observation.images.camera1':{'dtype':'image','shape':(3,224,224),'names':['channels','height','width']},'observation.images.camera2':{'dtype':'image','shape':(3,224,224),'names':['channels','height','width']},'observation.gripper_torque':{'dtype':'float32','shape':(30,a.torque_dim),'names':None}}
 ds=LeRobotDataset.create(repo_id=a.repo_id,root=root,fps=a.fps,features=features,robot_type='isaaclab_factory_franka',use_videos=a.use_videos)
 with h5py.File(a.input,'r') as f:
-    if f.attrs.get('format','') not in ('factory_peg_insert_formal_v1','factory_peg_insert_causal_recovery_v2','factory_peg_insert_conditional_recovery_v3','factory_peg_insert_visual_oneway_v2','factory_peg_insert_contact_recovery_native_v1','factory_peg_insert_contact_recovery_native_v1_balanced64'): raise ValueError('unexpected raw format')
+    if f.attrs.get('format','') not in ('factory_peg_insert_formal_v1','factory_peg_insert_causal_recovery_v2','factory_peg_insert_conditional_recovery_v3','factory_peg_insert_visual_oneway_v2','factory_peg_insert_contact_recovery_native_v1','factory_peg_insert_contact_recovery_native_v1_balanced64','factory_peg_insert_policy_failure_recovery_v1','factory_peg_insert_contact_recovery_v2_actual_failure80'): raise ValueError('unexpected raw format')
     demos=sorted(f['demos']); print(f'[FACTORY_CONVERT] demos={len(demos)} control={a.torque_control}',flush=True)
     if not demos: raise ValueError('no demos')
     for i,name in enumerate(demos):
