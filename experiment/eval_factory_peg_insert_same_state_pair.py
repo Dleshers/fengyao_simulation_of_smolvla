@@ -33,6 +33,18 @@ p.add_argument("--output", type=Path, required=True)
 p.add_argument("--episodes", type=int, default=8)
 p.add_argument("--max-attempts", type=int, default=64)
 p.add_argument("--seed", type=int, default=20261813)
+p.add_argument("--fixed-load-band", type=int, choices=(0, 1), help="Hold all accepted pairs at one predeclared load band; sectors remain balanced.")
+p.add_argument(
+    "--resume-json",
+    type=Path,
+    help="Resume accepted rows from a prior partial summary; rows are retained and only missing pairs are simulated.",
+)
+p.add_argument(
+    "--attempt-offset",
+    type=int,
+    default=0,
+    help="Offset added to attempt indices and deterministic seeds when resuming a partial run.",
+)
 p.add_argument("--max-coarse-steps", type=int, default=240)
 p.add_argument("--max-branch-steps", type=int, default=240)
 p.add_argument("--coarse-until-xy-m", type=float, default=0.0025)
@@ -47,11 +59,33 @@ p.add_argument("--flow-noise-seed", type=int, default=20260813)
 p.add_argument("--flow-noise-fixed-across-steps", action="store_true")
 p.add_argument("--action-clip", type=float, default=0.35)
 p.add_argument("--fine-xy-action-clip", type=float, default=0.05)
+p.add_argument(
+    "--initialization-mode",
+    choices=("coarse-prefix", "policy-failure", "controlled-contact"),
+    default="coarse-prefix",
+    help="Use the legacy prefix, policy-generated failure, or deterministic native-contact initialization.",
+)
+p.add_argument("--generator-visual-policy-path", type=Path)
+p.add_argument("--generator-torque-policy-path", type=Path)
+p.add_argument("--generator-policy-steps", type=int, default=180)
+p.add_argument("--generator-inference-samples", type=int, default=1)
+p.add_argument("--generator-coarse-until-xy-m", type=float, default=0.0035)
+p.add_argument("--failure-xy-max-m", type=float, default=0.001)
+p.add_argument("--failure-depth-min-m", type=float, default=0.015)
+p.add_argument("--failure-depth-max-m", type=float, default=0.032)
+p.add_argument("--max-grasp-drift-m", type=float, default=0.003)
+p.add_argument("--strict-hold-steps", type=int, default=10)
+p.add_argument("--ejection-z-m", type=float, default=0.040)
+p.add_argument("--pass-through-z-m", type=float, default=-0.010)
 p.add_argument("--save-traces", action="store_true")
 AppLauncher.add_app_launcher_args(p)
 a = p.parse_args()
 if a.episodes < 1 or a.max_attempts < 1 or a.max_coarse_steps < 1 or a.max_branch_steps < 1:
     p.error("episode, attempt and step limits must be positive")
+if a.attempt_offset < 0:
+    p.error("--attempt-offset must be non-negative")
+if a.fixed_load_band is not None and a.episodes % 8 != 0:
+    p.error("--fixed-load-band requires episodes to be a multiple of 8 for balanced sectors")
 if a.inference_samples < 1:
     p.error("--inference-samples must be positive")
 if a.coarse_until_xy_m <= 0:
@@ -60,6 +94,20 @@ if a.pre_takeover_unload_steps < 0:
     p.error("--pre-takeover-unload-steps must be non-negative")
 if a.action_clip < 0 or a.fine_xy_action_clip < 0:
     p.error("action clips must be non-negative")
+if a.initialization_mode == "policy-failure" and (
+    a.generator_visual_policy_path is None or a.generator_torque_policy_path is None
+):
+    p.error("policy-failure initialization requires both generator policy paths")
+if a.generator_policy_steps < 2:
+    p.error("--generator-policy-steps must be at least 2")
+if a.generator_inference_samples < 1:
+    p.error("--generator-inference-samples must be positive")
+if not (0 < a.failure_xy_max_m <= a.coarse_until_xy_m):
+    p.error("failure XY threshold must be positive and no greater than the branch threshold")
+if not (0 < a.failure_depth_min_m < a.failure_depth_max_m):
+    p.error("invalid failure depth band")
+if a.strict_hold_steps < 1 or a.pass_through_z_m >= -0.002 or a.ejection_z_m <= 0.001:
+    p.error("invalid strict hold or safety thresholds")
 
 if a.contact_history_steps != 30:
     p.error("--contact-history-steps must be 30 for the trained torque LSTM")
@@ -184,9 +232,10 @@ def load_policy(path: Path, metadata, force_visual: bool):
     return policy, pre, post
 
 
-def select_action(policy, pre, post, batch: dict, step: int) -> np.ndarray:
+def select_action(policy, pre, post, batch: dict, step: int, sample_count: int | None = None) -> np.ndarray:
     sampled = []
-    for sample_idx in range(a.inference_samples):
+    samples = a.inference_samples if sample_count is None else sample_count
+    for sample_idx in range(samples):
         generator = torch.Generator(device="cuda")
         noise_step = 0 if a.flow_noise_fixed_across_steps else step * 1009
         generator.manual_seed(a.flow_noise_seed + sample_idx + noise_step)
@@ -286,6 +335,16 @@ def restore_snapshot(e, snapshot: dict) -> dict:
 metadata = LeRobotDatasetMetadata(a.repo_id, root=a.dataset_root)
 visual_policy, visual_pre, visual_post = load_policy(a.visual_policy_path, metadata, force_visual=True)
 torque_policy, torque_pre, torque_post = load_policy(a.torque_policy_path, metadata, force_visual=False)
+if a.initialization_mode == "policy-failure":
+    generator_visual_policy, generator_visual_pre, generator_visual_post = load_policy(
+        a.generator_visual_policy_path, metadata, force_visual=True
+    )
+    generator_torque_policy, generator_torque_pre, generator_torque_post = load_policy(
+        a.generator_torque_policy_path, metadata, force_visual=False
+    )
+else:
+    generator_visual_policy = generator_visual_pre = generator_visual_post = None
+    generator_torque_policy = generator_torque_pre = generator_torque_post = None
 
 env_cfg = parse_env_cfg("Isaac-Factory-PegInsert-Direct-v0", device="cuda:0", num_envs=1)
 env_cfg.seed = a.seed
@@ -311,8 +370,14 @@ def branch(name: str, policy, pre, post, snapshot: dict, use_torque: bool, first
     if not use_torque:
         first_batch.pop("observation.gripper_torque")
     initial_xy, initial_z = pose(e)
+    branch_anchor = anchor(e).copy()
     action_trace, pose_trace = [], []
     success = False
+    strict_streak = 0
+    first_aligned_step = None
+    first_strict_step = None
+    max_grasp_drift = 0.0
+    ejected = passed_through = False
     for step in range(a.max_branch_steps):
         if step == 0:
             batch = first_batch
@@ -328,9 +393,18 @@ def branch(name: str, policy, pre, post, snapshot: dict, use_torque: bool, first
             action[:, :2] = np.clip(action[:, :2], -a.fine_xy_action_clip, a.fine_xy_action_clip)
         action_trace.append(action[0].tolist())
         env.step(torch.from_numpy(action).to(e.device))
-        success, xy, z = strict(e)
+        strict_now, xy, z = strict(e)
         delta = npv(e.held_pos[0]) - npv(e.fixed_pos[0])
         pose_trace.append((xy, z, float(delta[0]), float(delta[1])))
+        if first_aligned_step is None and xy < 0.0025:
+            first_aligned_step = step + 1
+        if strict_now and first_strict_step is None:
+            first_strict_step = step + 1
+        strict_streak = strict_streak + 1 if strict_now else 0
+        max_grasp_drift = max(max_grasp_drift, float(np.linalg.norm(anchor(e) - branch_anchor)))
+        ejected = ejected or z > a.ejection_z_m
+        passed_through = passed_through or z < a.pass_through_z_m
+        success = strict_streak >= a.strict_hold_steps
         if success:
             break
     poses = np.asarray(pose_trace)
@@ -343,6 +417,14 @@ def branch(name: str, policy, pre, post, snapshot: dict, use_torque: bool, first
         "initial_depth_m": initial_z,
         "steps": len(action_trace),
         "success": bool(success),
+        "strict_hold_steps_required": a.strict_hold_steps,
+        "first_aligned_step": first_aligned_step,
+        "first_strict_step": first_strict_step,
+        "time_to_success_steps": len(action_trace) if success else None,
+        "max_grasp_drift_m": max_grasp_drift,
+        "grasp_drift_failure": max_grasp_drift > a.max_grasp_drift_m,
+        "ejected": bool(ejected),
+        "passed_through": bool(passed_through),
         "min_xy_error_m": float(poses[:, 0].min()),
         "min_depth_m": float(poses[:, 1].min()),
         "final_xy_error_m": float(poses[-1, 0]),
@@ -355,11 +437,26 @@ def branch(name: str, policy, pre, post, snapshot: dict, use_torque: bool, first
 
 
 rows = []
-for attempt in range(a.max_attempts):
+if a.resume_json is not None:
+    if not a.resume_json.exists():
+        p.error(f"resume summary does not exist: {a.resume_json}")
+    resume_payload = json.loads(a.resume_json.read_text())
+    rows = list(resume_payload.get("rows", []))
+    if any(not isinstance(row, dict) for row in rows):
+        p.error("resume summary rows must be JSON objects")
+    print(f"[SAME_STATE_PAIR] resuming {len(rows)} accepted rows from {a.resume_json}", flush=True)
+for local_attempt in range(a.max_attempts):
     if len(rows) >= a.episodes:
         break
+    attempt = a.attempt_offset + local_attempt
     seed = a.seed + attempt
-    sector = attempt % 8
+    if a.fixed_load_band is not None:
+        # Predeclared single-load extension; cycles sectors evenly.
+        sector = len(rows) % 8
+        load_band = a.fixed_load_band
+    else:
+        sector = (len(rows) // 2) % 8 if a.initialization_mode in ("policy-failure", "controlled-contact") else attempt % 8
+        load_band = len(rows) % 2 if a.initialization_mode in ("policy-failure", "controlled-contact") else attempt % 2
     angle = 2 * np.pi * sector / 8
     offset = np.array([np.cos(angle), np.sin(angle)], np.float32) * a.contact_offset_m
     env.reset(seed=seed)
@@ -367,6 +464,9 @@ for attempt in range(a.max_attempts):
     torch.cuda.manual_seed_all(seed)
     visual_policy.reset()
     torque_policy.reset()
+    if generator_visual_policy is not None:
+        generator_visual_policy.reset()
+        generator_torque_policy.reset()
     for _ in range(3):
         env.step(torch.zeros((1, 6), device=e.device))
         e.sim.render()
@@ -386,11 +486,13 @@ for attempt in range(a.max_attempts):
             if phase_step >= 23:
                 phase, phase_step = "approach", 0
         elif phase == "approach":
-            action = action_to(e, offset, max(-0.002, 0.025 - 0.00027 * phase_step))
+            contact_target_z = -0.002 if load_band == 0 else -0.004
+            action = action_to(e, offset, max(contact_target_z, 0.025 - 0.00027 * phase_step))
             if phase_step >= 99:
                 phase, phase_step = "history", 0
         else:
-            action = action_to(e, offset, -0.002, clip=0.20)
+            contact_target_z = -0.002 if load_band == 0 else -0.004
+            action = action_to(e, offset, contact_target_z, clip=0.20)
             history.append(npv(e.joint_torque[0, :7]).astype(np.float32))
             if phase_step <= 1:
                 contact_xy, contact_z = xy, z
@@ -423,8 +525,9 @@ for attempt in range(a.max_attempts):
         continue
 
     # Reproduce the collector transition from physical contact history into
-    # phase 5. It records pre-action torque for all 15 unload actions.
-    for _ in range(a.pre_takeover_unload_steps):
+    # phase 5. The hard16 collector uses 14 history-only unload actions.
+    unload_steps = 14 if a.initialization_mode == "policy-failure" else a.pre_takeover_unload_steps
+    for _ in range(unload_steps):
         history.append(npv(e.joint_torque[0, :7]).astype(np.float32))
         env.step(action_to(e, offset, 0.012))
         e.sim.render()
@@ -433,8 +536,102 @@ for attempt in range(a.max_attempts):
     # causal fork. The switch is latched at the first threshold crossing.
     reached_threshold = False
     coarse_trace = []
+    failure_reason = None
+    if a.initialization_mode == "controlled-contact":
+        # Deterministic native-contact initializer for the evaluation gate.
+        # Starting from the measured rim contact, move laterally toward the
+        # hole while holding a positive 15--32 mm height.  The peg remains
+        # constrained by the rim; no simulator pose/state is teleported.
+        target_z = 0.023 if load_band == 0 else 0.025
+        for rollout_step in range(90):
+            history.append(npv(e.joint_torque[0, :7]).astype(np.float32))
+            action = action_to(e, np.zeros(2, np.float32), target_z, clip=0.16)
+            env.step(action)
+            e.sim.render()
+            after_xy, after_z = pose(e)
+            coarse_trace.append((after_xy, after_z))
+        failure_xy, failure_z = pose(e)
+        drift = float(np.linalg.norm(anchor(e) - start_anchor))
+        failure_reason = "controlled_near_hole_contact"
+        reached_threshold = bool(
+            failure_xy < a.failure_xy_max_m
+            and a.failure_depth_min_m <= failure_z <= a.failure_depth_max_m
+            and not strict(e)[0]
+            and drift <= a.max_grasp_drift_m
+        )
+        if not reached_threshold:
+            print(
+                "[SAME_STATE_PAIR] controlled-contact reject",
+                {"seed": seed, "sector": sector, "load": load_band, "xy": failure_xy, "z": failure_z, "drift": drift},
+                flush=True,
+            )
+            continue
+    elif a.initialization_mode == "policy-failure":
+        fine_takeover = False
+        previous_xy_action = None
+        for rollout_step in range(a.generator_policy_steps):
+            before_xy, before_z = pose(e)
+            fine_takeover = fine_takeover or before_xy <= a.generator_coarse_until_xy_m
+            if fine_takeover:
+                policy, pre, post, uses_torque = (
+                    generator_torque_policy, generator_torque_pre, generator_torque_post, True
+                )
+            else:
+                policy, pre, post, uses_torque = (
+                    generator_visual_policy, generator_visual_pre, generator_visual_post, False
+                )
+            e.sim.render()
+            history.append(npv(e.joint_torque[0, :7]).astype(np.float32))
+            window = np.stack(history).astype(np.float32)
+            batch, _ = observation(e, annotators, window if uses_torque else None)
+            action_np = select_action(policy, pre, post, batch, rollout_step, a.generator_inference_samples)
+            # Keep the generator in the measured rim-contact band. Without
+            # this guard a policy that has almost found the hole can continue
+            # downward and enter it, destroying the intended <1 mm blocked
+            # initialization (the previous run ended at z~=0 mm). This is
+            # an action-space safety clamp only; state remains native physics.
+            if before_z < a.failure_depth_min_m:
+                target_z = 0.5 * (a.failure_depth_min_m + a.failure_depth_max_m)
+                action_np[0, 2] = max(
+                    float(action_np[0, 2]),
+                    float(np.clip((target_z - before_z) / 0.01, 0.0, a.action_clip)),
+                )
+            elif before_z <= a.failure_depth_min_m + 0.004:
+                action_np[0, 2] = max(float(action_np[0, 2]), 0.0)
+            env.step(torch.from_numpy(action_np).to(e.device))
+            after_success, after_xy, after_z = strict(e)
+            coarse_trace.append((after_xy, after_z))
+            action_vec = action_np[0]
+            lateral = float(np.linalg.norm(action_vec[:2]))
+            blocked = bool(action_vec[2] < -0.08 and abs(after_z - before_z) < 0.00010)
+            flipped = bool(
+                previous_xy_action is not None
+                and float(np.dot(previous_xy_action, action_vec[:2])) < 0.0
+            )
+            previous_xy_action = action_vec[:2].copy()
+            if after_success:
+                break
+            if after_xy < a.failure_xy_max_m and rollout_step >= 1 and (
+                lateral >= 0.08 or blocked or flipped or after_xy >= before_xy
+            ):
+                failure_reason = "policy_failure_trigger"
+                break
+        failure_xy, failure_z = pose(e)
+        drift = float(np.linalg.norm(anchor(e) - start_anchor))
+        reached_threshold = bool(
+            failure_reason and failure_xy < a.failure_xy_max_m
+            and a.failure_depth_min_m <= failure_z <= a.failure_depth_max_m
+            and not strict(e)[0] and drift <= a.max_grasp_drift_m
+        )
+        if not reached_threshold:
+            print(
+                "[SAME_STATE_PAIR] policy-failure reject",
+                {"seed": seed, "sector": sector, "load": load_band, "xy": failure_xy, "z": failure_z, "drift": drift},
+                flush=True,
+            )
+            continue
     visual_policy.reset()
-    for coarse_step in range(a.max_coarse_steps):
+    for coarse_step in range(0 if reached_threshold else a.max_coarse_steps):
         e.sim.render()
         history.append(npv(e.joint_torque[0, :7]).astype(np.float32))
         batch, _ = observation(e, annotators)
@@ -484,9 +681,12 @@ for attempt in range(a.max_attempts):
         "attempt": attempt,
         "seed": seed,
         "sector": sector,
+        "load_band": load_band,
         "contact_xy_error_m": contact_xy,
         "contact_depth_m": contact_z,
         "contact_torque_delta": torque_delta,
+        "initialization_mode": a.initialization_mode,
+        "generator_failure_reason": failure_reason,
         "coarse_steps": len(coarse_trace),
         "coarse_min_xy_error_m": min(x[0] for x in coarse_trace),
         "snapshot_sha256": snapshot["sha256"],
@@ -509,6 +709,9 @@ summary = {
     ),
     "visual_policy": str(a.visual_policy_path),
     "torque_policy": str(a.torque_policy_path),
+    "initialization_mode": a.initialization_mode,
+    "generator_visual_policy": str(a.generator_visual_policy_path) if a.generator_visual_policy_path else None,
+    "generator_torque_policy": str(a.generator_torque_policy_path) if a.generator_torque_policy_path else None,
     "episodes_requested": a.episodes,
     "attempts_allowed": a.max_attempts,
     "pairs": len(rows),
