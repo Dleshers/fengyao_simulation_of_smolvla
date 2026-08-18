@@ -1,0 +1,543 @@
+{
+  "decision": "FAIL",
+  "pairs": 64,
+  "integrity": true,
+  "balanced_sector_load_grid": true,
+  "expected_per_cell": 4,
+  "overall": {
+    "visual": {
+      "n": 64,
+      "strict": 44,
+      "strict_rate": 0.6875,
+      "aligned": 64,
+      "alignment_rate": 1.0,
+      "mean_success_steps": 43.0,
+      "ejected": 1,
+      "passed_through": 1,
+      "grasp_drift_failure": 0
+    },
+    "torque_original": {
+      "n": 64,
+      "strict": 56,
+      "strict_rate": 0.875,
+      "aligned": 64,
+      "alignment_rate": 1.0,
+      "mean_success_steps": 53.035714285714285,
+      "ejected": 3,
+      "passed_through": 1,
+      "grasp_drift_failure": 0
+    },
+    "zero": {
+      "n": 64,
+      "strict": 48,
+      "strict_rate": 0.75,
+      "aligned": 64,
+      "alignment_rate": 1.0,
+      "mean_success_steps": 61.291666666666664,
+      "ejected": 0,
+      "passed_through": 1,
+      "grasp_drift_failure": 0
+    },
+    "shuffle": {
+      "n": 64,
+      "strict": 54,
+      "strict_rate": 0.84375,
+      "aligned": 64,
+      "alignment_rate": 1.0,
+      "mean_success_steps": 58.03703703703704,
+      "ejected": 0,
+      "passed_through": 1,
+      "grasp_drift_failure": 0
+    }
+  },
+  "by_load": {
+    "0": {
+      "visual": {
+        "n": 32,
+        "strict": 21,
+        "strict_rate": 0.65625,
+        "aligned": 32,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 38.42857142857143,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 32,
+        "strict": 29,
+        "strict_rate": 0.90625,
+        "aligned": 32,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 46.3448275862069,
+        "ejected": 2,
+        "passed_through": 1,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 32,
+        "strict": 26,
+        "strict_rate": 0.8125,
+        "aligned": 32,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 54.30769230769231,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 32,
+        "strict": 29,
+        "strict_rate": 0.90625,
+        "aligned": 32,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 52.58620689655172,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      }
+    },
+    "1": {
+      "visual": {
+        "n": 32,
+        "strict": 23,
+        "strict_rate": 0.71875,
+        "aligned": 32,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 47.17391304347826,
+        "ejected": 1,
+        "passed_through": 1,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 32,
+        "strict": 27,
+        "strict_rate": 0.84375,
+        "aligned": 32,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 60.22222222222222,
+        "ejected": 1,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 32,
+        "strict": 22,
+        "strict_rate": 0.6875,
+        "aligned": 32,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 69.54545454545455,
+        "ejected": 0,
+        "passed_through": 1,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 32,
+        "strict": 25,
+        "strict_rate": 0.78125,
+        "aligned": 32,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 64.36,
+        "ejected": 0,
+        "passed_through": 1,
+        "grasp_drift_failure": 0
+      }
+    }
+  },
+  "by_sector": {
+    "0": {
+      "visual": {
+        "n": 8,
+        "strict": 7,
+        "strict_rate": 0.875,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 38.142857142857146,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 8,
+        "strict": 7,
+        "strict_rate": 0.875,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 52.142857142857146,
+        "ejected": 1,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 8,
+        "strict": 6,
+        "strict_rate": 0.75,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 72.33333333333333,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 8,
+        "strict": 7,
+        "strict_rate": 0.875,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 52.0,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      }
+    },
+    "1": {
+      "visual": {
+        "n": 8,
+        "strict": 5,
+        "strict_rate": 0.625,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 46.4,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 8,
+        "strict": 8,
+        "strict_rate": 1.0,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 54.875,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 8,
+        "strict": 4,
+        "strict_rate": 0.5,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 86.0,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 8,
+        "strict": 8,
+        "strict_rate": 1.0,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 48.125,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      }
+    },
+    "2": {
+      "visual": {
+        "n": 8,
+        "strict": 4,
+        "strict_rate": 0.5,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 43.5,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 8,
+        "strict": 8,
+        "strict_rate": 1.0,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 49.375,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 8,
+        "strict": 8,
+        "strict_rate": 1.0,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 73.0,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 8,
+        "strict": 6,
+        "strict_rate": 0.75,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 42.666666666666664,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      }
+    },
+    "3": {
+      "visual": {
+        "n": 8,
+        "strict": 3,
+        "strict_rate": 0.375,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 38.666666666666664,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 8,
+        "strict": 8,
+        "strict_rate": 1.0,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 47.875,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 8,
+        "strict": 7,
+        "strict_rate": 0.875,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 52.57142857142857,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 8,
+        "strict": 6,
+        "strict_rate": 0.75,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 50.5,
+        "ejected": 0,
+        "passed_through": 1,
+        "grasp_drift_failure": 0
+      }
+    },
+    "4": {
+      "visual": {
+        "n": 8,
+        "strict": 8,
+        "strict_rate": 1.0,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 43.5,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 8,
+        "strict": 6,
+        "strict_rate": 0.75,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 39.333333333333336,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 8,
+        "strict": 7,
+        "strict_rate": 0.875,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 44.285714285714285,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 8,
+        "strict": 8,
+        "strict_rate": 1.0,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 47.25,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      }
+    },
+    "5": {
+      "visual": {
+        "n": 8,
+        "strict": 6,
+        "strict_rate": 0.75,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 43.666666666666664,
+        "ejected": 0,
+        "passed_through": 1,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 8,
+        "strict": 5,
+        "strict_rate": 0.625,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 56.0,
+        "ejected": 1,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 8,
+        "strict": 7,
+        "strict_rate": 0.875,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 50.857142857142854,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 8,
+        "strict": 5,
+        "strict_rate": 0.625,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 48.8,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      }
+    },
+    "6": {
+      "visual": {
+        "n": 8,
+        "strict": 5,
+        "strict_rate": 0.625,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 45.0,
+        "ejected": 1,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 8,
+        "strict": 7,
+        "strict_rate": 0.875,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 60.857142857142854,
+        "ejected": 0,
+        "passed_through": 1,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 8,
+        "strict": 5,
+        "strict_rate": 0.625,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 53.2,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 8,
+        "strict": 6,
+        "strict_rate": 0.75,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 80.0,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      }
+    },
+    "7": {
+      "visual": {
+        "n": 8,
+        "strict": 6,
+        "strict_rate": 0.75,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 44.666666666666664,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "torque_original": {
+        "n": 8,
+        "strict": 7,
+        "strict_rate": 0.875,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 63.714285714285715,
+        "ejected": 1,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      },
+      "zero": {
+        "n": 8,
+        "strict": 4,
+        "strict_rate": 0.5,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 70.0,
+        "ejected": 0,
+        "passed_through": 1,
+        "grasp_drift_failure": 0
+      },
+      "shuffle": {
+        "n": 8,
+        "strict": 8,
+        "strict_rate": 1.0,
+        "aligned": 8,
+        "alignment_rate": 1.0,
+        "mean_success_steps": 90.5,
+        "ejected": 0,
+        "passed_through": 0,
+        "grasp_drift_failure": 0
+      }
+    }
+  },
+  "pairwise_vs_visual": {
+    "torque_original": {
+      "wins_over_visual": 17,
+      "losses_to_visual": 5,
+      "ties": 42
+    },
+    "zero": {
+      "wins_over_visual": 12,
+      "losses_to_visual": 8,
+      "ties": 44
+    },
+    "shuffle": {
+      "wins_over_visual": 13,
+      "losses_to_visual": 3,
+      "ties": 48
+    }
+  },
+  "strict_rate_delta_torque_vs_visual": 0.1875,
+  "positive_both_loads": true,
+  "torque_noninferior_sectors": 6,
+  "safety_noninferior": false,
+  "thresholds": {
+    "minimum_formal_pairs": 64,
+    "minimum_strict_delta": 0.1,
+    "minimum_noninferior_sectors": 6
+  }
+}

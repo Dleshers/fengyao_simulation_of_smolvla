@@ -78,6 +78,9 @@ p.add_argument("--strict-hold-steps", type=int, default=10)
 p.add_argument("--ejection-z-m", type=float, default=0.040)
 p.add_argument("--pass-through-z-m", type=float, default=-0.010)
 p.add_argument("--save-traces", action="store_true")
+p.add_argument("--modes", default="visual,torque_original", help="Comma-separated arms: visual,torque_original,zero,shuffle.")
+p.add_argument("--snapshot-dir", type=Path, help="Directory for reusable complete CPU snapshots and shared first RGB frames.")
+p.add_argument("--controlled-contact-max-steps", type=int, default=180, help="Maximum native-contact alignment steps; stop at first valid <1 mm crossing.")
 AppLauncher.add_app_launcher_args(p)
 a = p.parse_args()
 if a.episodes < 1 or a.max_attempts < 1 or a.max_coarse_steps < 1 or a.max_branch_steps < 1:
@@ -108,6 +111,14 @@ if not (0 < a.failure_depth_min_m < a.failure_depth_max_m):
     p.error("invalid failure depth band")
 if a.strict_hold_steps < 1 or a.pass_through_z_m >= -0.002 or a.ejection_z_m <= 0.001:
     p.error("invalid strict hold or safety thresholds")
+if a.controlled_contact_max_steps < 1:
+    p.error("--controlled-contact-max-steps must be positive")
+mode_names = tuple(x.strip() for x in a.modes.split(",") if x.strip())
+allowed_modes = {"visual", "torque_original", "zero", "shuffle"}
+if not mode_names or any(x not in allowed_modes for x in mode_names) or len(set(mode_names)) != len(mode_names):
+    p.error("--modes must be a non-empty comma-separated subset of visual,torque_original,zero,shuffle")
+if "visual" not in mode_names or "torque_original" not in mode_names:
+    p.error("formal comparisons require both visual and torque_original arms")
 
 if a.contact_history_steps != 30:
     p.error("--contact-history-steps must be 30 for the trained torque LSTM")
@@ -332,6 +343,41 @@ def restore_snapshot(e, snapshot: dict) -> dict:
     return errors
 
 
+def _cpu_snapshot_value(value):
+    if torch.is_tensor(value):
+        return value.detach().cpu().clone()
+    if isinstance(value, np.ndarray):
+        return value.copy()
+    return value
+
+
+def save_snapshot_bundle(snapshot: dict, first_images: dict[str, np.ndarray], pair_id: int, output_dir: Path, metadata: dict) -> dict:
+    """Persist all captured controller/physics tensors plus the shared RGB frame.
+
+    The tensors are CPU copies so a later Isaac process can load them without the
+    original CUDA context.  The RGB npz and manifest are kept alongside the .pt.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stem = f"snapshot_{pair_id:04d}"
+    tensor_payload = {k: _cpu_snapshot_value(v) for k, v in snapshot.items() if k != "sha256"}
+    tensor_payload["sha256"] = snapshot["sha256"]
+    tensor_path = output_dir / f"{stem}.pt"
+    rgb_path = output_dir / f"{stem}_first_rgb.npz"
+    torch.save(tensor_payload, tensor_path)
+    np.savez_compressed(rgb_path, **{k: np.asarray(v, dtype=np.uint8) for k, v in first_images.items()})
+    manifest = {
+        **metadata,
+        "snapshot_sha256": snapshot["sha256"],
+        "tensor_file": str(tensor_path),
+        "first_rgb_file": str(rgb_path),
+        "snapshot_keys": sorted(tensor_payload),
+        "tensor_device_on_disk": "cpu",
+    }
+    manifest_path = output_dir / f"{stem}.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    return {"tensor_file": str(tensor_path), "first_rgb_file": str(rgb_path), "manifest_file": str(manifest_path)}
+
+
 metadata = LeRobotDatasetMetadata(a.repo_id, root=a.dataset_root)
 visual_policy, visual_pre, visual_post = load_policy(a.visual_policy_path, metadata, force_visual=True)
 torque_policy, torque_pre, torque_post = load_policy(a.torque_policy_path, metadata, force_visual=False)
@@ -357,17 +403,41 @@ e = env.unwrapped
 annotators = cameras()
 
 
-def branch(name: str, policy, pre, post, snapshot: dict, use_torque: bool, first_images: dict[str, np.ndarray]) -> dict:
+def branch(
+    name: str,
+    policy,
+    pre,
+    post,
+    snapshot: dict,
+    first_images: dict[str, np.ndarray],
+    pair_seed: int,
+) -> dict:
+    """Run one causal arm from the exact shared snapshot.
+
+    ``zero`` and ``shuffle`` intentionally use the torque policy while
+    transforming only its 30x7 input window.  Their state/RGB start is still
+    restored and audited exactly like the visual and original-torque arms.
+    """
     restore_error = restore_snapshot(e, snapshot)
     policy.reset()
-    torques = deque((x.copy() for x in snapshot["torque_history"]), maxlen=30)
+    base_torques = deque((x.copy() for x in snapshot["torque_history"]), maxlen=30)
     # The converted phase-5 sample includes the current pre-action torque.
-    # Append it before constructing the first inference window; otherwise the
-    # online window is shifted by one frame relative to training.
-    torques.append(npv(e.joint_torque[0, :7]).astype(np.float32))
-    initial_window = np.stack(torques).astype(np.float32)
+    base_torques.append(npv(e.joint_torque[0, :7]).astype(np.float32))
+    shuffle_rng = np.random.default_rng(pair_seed + 910_000)
+
+    def input_window(window: np.ndarray, step: int) -> np.ndarray:
+        if name == "zero":
+            return np.zeros_like(window)
+        if name == "shuffle":
+            return window[shuffle_rng.permutation(window.shape[0])]
+        return window
+
+    initial_base_window = np.stack(base_torques).astype(np.float32)
+    initial_window = input_window(initial_base_window, 0)
     first_batch, initial_audit = observation(e, annotators, initial_window, image_override=first_images)
-    if not use_torque:
+    initial_audit["base_torque_window_sha256"] = hashlib.sha256(initial_base_window.tobytes()).hexdigest()
+    initial_audit["torque_input_mode"] = name
+    if name == "visual":
         first_batch.pop("observation.gripper_torque")
     initial_xy, initial_z = pose(e)
     branch_anchor = anchor(e).copy()
@@ -383,10 +453,11 @@ def branch(name: str, policy, pre, post, snapshot: dict, use_torque: bool, first
             batch = first_batch
         else:
             e.sim.render()
-            torques.append(npv(e.joint_torque[0, :7]).astype(np.float32))
-            window = np.stack(torques).astype(np.float32)
+            base_torques.append(npv(e.joint_torque[0, :7]).astype(np.float32))
+            base_window = np.stack(base_torques).astype(np.float32)
+            window = input_window(base_window, step)
             batch, _ = observation(e, annotators, window)
-            if not use_torque:
+            if name == "visual":
                 batch.pop("observation.gripper_torque")
         action = select_action(policy, pre, post, batch, step)
         if a.fine_xy_action_clip > 0:
@@ -410,7 +481,8 @@ def branch(name: str, policy, pre, post, snapshot: dict, use_torque: bool, first
     poses = np.asarray(pose_trace)
     result = {
         "name": name,
-        "uses_torque": use_torque,
+        "uses_torque": name != "visual",
+        "torque_input_mode": name,
         "restore_max_abs_errors": restore_error,
         "initial_audit": initial_audit,
         "initial_xy_error_m": initial_xy,
@@ -543,22 +615,31 @@ for local_attempt in range(a.max_attempts):
         # hole while holding a positive 15--32 mm height.  The peg remains
         # constrained by the rim; no simulator pose/state is teleported.
         target_z = 0.023 if load_band == 0 else 0.025
-        for rollout_step in range(90):
+        # Adaptive native alignment: stop on the first valid threshold crossing
+        # instead of integrating a fixed 90-step prefix that can overshoot the
+        # hole.  All acceptance gates remain unchanged (<1 mm, 15--32 mm,
+        # non-strict, and bounded grasp drift).
+        for rollout_step in range(a.controlled_contact_max_steps):
             history.append(npv(e.joint_torque[0, :7]).astype(np.float32))
             action = action_to(e, np.zeros(2, np.float32), target_z, clip=0.16)
             env.step(action)
             e.sim.render()
             after_xy, after_z = pose(e)
             coarse_trace.append((after_xy, after_z))
+            drift = float(np.linalg.norm(anchor(e) - start_anchor))
+            reached_threshold = bool(
+                after_xy < a.failure_xy_max_m
+                and a.failure_depth_min_m <= after_z <= a.failure_depth_max_m
+                and not strict(e)[0]
+                and drift <= a.max_grasp_drift_m
+            )
+            if reached_threshold:
+                failure_reason = "controlled_near_hole_contact_first_crossing"
+                break
         failure_xy, failure_z = pose(e)
         drift = float(np.linalg.norm(anchor(e) - start_anchor))
-        failure_reason = "controlled_near_hole_contact"
-        reached_threshold = bool(
-            failure_xy < a.failure_xy_max_m
-            and a.failure_depth_min_m <= failure_z <= a.failure_depth_max_m
-            and not strict(e)[0]
-            and drift <= a.max_grasp_drift_m
-        )
+        if not reached_threshold:
+            failure_reason = "controlled_near_hole_contact_timeout"
         if not reached_threshold:
             print(
                 "[SAME_STATE_PAIR] controlled-contact reject",
@@ -652,30 +733,58 @@ for local_attempt in range(a.max_attempts):
 
     snapshot = capture_snapshot(e, history)
     # RTX temporal state is not exactly replayable from physics state. Render
-    # the fork observation once and replay that exact RGB to both first
-    # actions; later frames remain live and branch-specific.
+    # the fork observation once and replay that exact RGB to every arm; later
+    # frames remain live and branch-specific.
     e.sim.render()
     first_images = {name: image(ann) for name, ann in annotators.items()}
-    branch_specs = [
-        ("visual", visual_policy, visual_pre, visual_post, False),
-        ("torque_original", torque_policy, torque_pre, torque_post, True),
-    ]
-    # Alternate order to expose any residual branch-order bias.
-    if len(rows) % 2:
-        branch_specs.reverse()
+    branch_order = list(mode_names) if len(rows) % 2 == 0 else list(reversed(mode_names))
+    policy_specs = {
+        "visual": (visual_policy, visual_pre, visual_post),
+        "torque_original": (torque_policy, torque_pre, torque_post),
+        "zero": (torque_policy, torque_pre, torque_post),
+        "shuffle": (torque_policy, torque_pre, torque_post),
+    }
     branch_results = {}
-    for branch_name, policy, pre, post, use_torque in branch_specs:
-        branch_results[branch_name] = branch(branch_name, policy, pre, post, snapshot, use_torque, first_images)
+    for branch_name in branch_order:
+        policy, pre, post = policy_specs[branch_name]
+        branch_results[branch_name] = branch(
+            branch_name, policy, pre, post, snapshot, first_images, pair_seed=seed
+        )
 
-    visual = branch_results["visual"]
-    torque = branch_results["torque_original"]
-    audit_keys = ("state_sha256", "camera1_sha256", "camera2_sha256", "torque_window_sha256")
-    matching_hashes = all(visual["initial_audit"].get(k) == torque["initial_audit"].get(k) for k in audit_keys)
-    restore_ok = max(
-        visual["restore_max_abs_errors"]["max_abs"],
-        torque["restore_max_abs_errors"]["max_abs"],
-    ) <= 1.0e-6
-    paired_identical = bool(matching_hashes and restore_ok)
+    identity_keys = ("state_sha256", "camera1_sha256", "camera2_sha256")
+    identity_values = [branch_results[name]["initial_audit"] for name in mode_names]
+    matching_state_rgb = all(
+        all(audit.get(key) == identity_values[0].get(key) for key in identity_keys)
+        for audit in identity_values
+    )
+    matching_base_torque = len({
+        audit.get("base_torque_window_sha256") for audit in identity_values
+    }) == 1
+    restore_ok = all(
+        result["restore_max_abs_errors"]["max_abs"] <= 1.0e-6
+        for result in branch_results.values()
+    )
+    paired_identical = bool(matching_state_rgb and matching_base_torque and restore_ok)
+    snapshot_files = {}
+    if a.snapshot_dir is not None:
+        snapshot_files = save_snapshot_bundle(
+            snapshot,
+            first_images,
+            len(rows),
+            a.snapshot_dir,
+            {
+                "pair_id": len(rows),
+                "seed": seed,
+                "sector": sector,
+                "load_band": load_band,
+                "initialization_mode": a.initialization_mode,
+                "modes": list(mode_names),
+                "contact_xy_error_m": contact_xy,
+                "contact_depth_m": contact_z,
+                "contact_torque_delta": torque_delta,
+                "coarse_steps": len(coarse_trace),
+            },
+        )
     row = {
         "pair_id": len(rows),
         "attempt": attempt,
@@ -690,11 +799,19 @@ for local_attempt in range(a.max_attempts):
         "coarse_steps": len(coarse_trace),
         "coarse_min_xy_error_m": min(x[0] for x in coarse_trace),
         "snapshot_sha256": snapshot["sha256"],
-        "branch_order": [x[0] for x in branch_specs],
+        "snapshot_files": snapshot_files,
+        "branch_order": branch_order,
+        "paired_state_rgb_identical": matching_state_rgb,
+        "paired_base_torque_identical": matching_base_torque,
         "paired_initial_observation_identical": paired_identical,
-        "visual": visual,
-        "torque_original": torque,
+        "branches": branch_results,
+        # Keep stable top-level names for existing visual/original reports.
+        "visual": branch_results["visual"],
+        "torque_original": branch_results["torque_original"],
     }
+    for extra_mode in ("zero", "shuffle"):
+        if extra_mode in branch_results:
+            row[extra_mode] = branch_results[extra_mode]
     if a.save_traces:
         row["coarse_trace_xy_z"] = coarse_trace
     rows.append(row)
@@ -702,23 +819,30 @@ for local_attempt in range(a.max_attempts):
 
 valid_pairs = [r for r in rows if r["paired_initial_observation_identical"]]
 summary = {
-    "benchmark": "same_process_same_snapshot_visual_vs_torque_v1",
+    "benchmark": "same_process_same_snapshot_four_arm_v1" if len(mode_names) == 4 else "same_process_same_snapshot_visual_vs_torque_v1",
     "interpretation": (
-        "One native contact initialization and one shared visual prefix are restored in-process for both branches. "
-        "Only pairs with identical state/RGB/torque-window hashes and <=1e-6 restoration error are admissible."
+        "One native contact initialization and one shared visual prefix are restored in-process for every arm. "
+        "All admissible pairs must have identical state/RGB/base-torque hashes and <=1e-6 restoration error. "
+        "zero and shuffle transform only the torque policy's 30x7 input window."
     ),
     "visual_policy": str(a.visual_policy_path),
     "torque_policy": str(a.torque_policy_path),
+    "modes": list(mode_names),
     "initialization_mode": a.initialization_mode,
+    "controlled_contact_max_steps": a.controlled_contact_max_steps,
     "generator_visual_policy": str(a.generator_visual_policy_path) if a.generator_visual_policy_path else None,
     "generator_torque_policy": str(a.generator_torque_policy_path) if a.generator_torque_policy_path else None,
     "episodes_requested": a.episodes,
     "attempts_allowed": a.max_attempts,
     "pairs": len(rows),
     "valid_identical_pairs": len(valid_pairs),
-    "visual_strict_recoveries": sum(r["visual"]["success"] for r in valid_pairs),
-    "torque_strict_recoveries": sum(r["torque_original"]["success"] for r in valid_pairs),
+    "strict_recoveries_by_mode": {
+        mode: sum(bool(r["branches"][mode]["success"]) for r in valid_pairs)
+        for mode in mode_names
+    },
     "coarse_until_xy_m": a.coarse_until_xy_m,
+    "failure_xy_max_m": a.failure_xy_max_m,
+    "failure_depth_band_m": [a.failure_depth_min_m, a.failure_depth_max_m],
     "pre_takeover_unload_steps": a.pre_takeover_unload_steps,
     "inference_samples": a.inference_samples,
     "flow_noise_seed": a.flow_noise_seed,
@@ -726,6 +850,7 @@ summary = {
     "common_first_rgb_replayed": True,
     "action_clip": a.action_clip,
     "fine_xy_action_clip": a.fine_xy_action_clip,
+    "snapshot_dir": str(a.snapshot_dir) if a.snapshot_dir else None,
     "rows": rows,
 }
 a.output.parent.mkdir(parents=True, exist_ok=True)
