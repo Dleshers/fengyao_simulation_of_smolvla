@@ -1,0 +1,31 @@
+{
+  "resolution": [
+    1920,
+    1080
+  ],
+  "frames": {
+    "01_initial_lateral_error": {
+      "nonuniform": true,
+      "mean": 148.6859130859375,
+      "std": 53.2271728515625
+    },
+    "02_contact_misalignment": {
+      "nonuniform": true,
+      "mean": 151.15237426757812,
+      "std": 51.83561325073242,
+      "mean_abs_diff_from_initial": 4.4507904052734375
+    },
+    "03_lateral_recovery": {
+      "nonuniform": true,
+      "mean": 151.98275756835938,
+      "std": 51.08978271484375,
+      "mean_abs_diff_from_initial": 7.459187030792236
+    },
+    "04_aligned_insertion": {
+      "nonuniform": true,
+      "mean": 152.03428649902344,
+      "std": 50.40327453613281,
+      "mean_abs_diff_from_initial": 9.684518814086914
+    }
+  }
+}

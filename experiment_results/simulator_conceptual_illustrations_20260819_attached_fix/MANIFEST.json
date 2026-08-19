@@ -1,0 +1,21 @@
+{
+  "case_type": "simulator_rendered_conceptual_illustration",
+  "formal64_pair_id": null,
+  "is_formal64_evaluation_trajectory": false,
+  "is_policy_output": false,
+  "source": "Isaac Sim 4.5 / Isaac Lab Factory PegInsert Direct scene",
+  "script": "experiment/render_simulator_conceptual_illustrations_20260819_attached.py",
+  "snapshot_source": "_runtime/remote_handoff_gripper_lstm_work/persistent/evaluation_results/visual_torque_4090_master_20260817/four_arm_formal64_adaptive_20260817/snapshots/snapshot_0014.pt",
+  "camera_pose": [1.15, -0.95, 0.62],
+  "camera_target": [0.42, 0.0, 0.20],
+  "resolution": [1920, 1080],
+  "attachment_method": "identical USD translation on /World/envs/env_0/Robot and /World/envs/env_0/HeldAsset",
+  "caption": "Simulator-rendered conceptual illustration of contact-stage recovery. The states are scripted illustrative configurations and are not Formal64 evaluation trajectories or quantitative outcomes.",
+  "assets": [
+    {"path": "contact_recovery_sequence/01_initial_lateral_error.png", "sha256": "bb2e0a9c36fa2d61e6587dd3145f59cd0cbcb46402b0111bceeeee1d337b2f71", "resolution": [1920, 1080]},
+    {"path": "contact_recovery_sequence/02_contact_misalignment.png", "sha256": "b7de3d7214bca12e0038f3a86e429ad15e900b1b42fad800201b6bcc08e2f07c", "resolution": [1920, 1080]},
+    {"path": "contact_recovery_sequence/03_lateral_recovery.png", "sha256": "fec4f4bf3b6eddb2367e7b3ade327068b35ec14d54d9938d52b07603ab9ee476", "resolution": [1920, 1080]},
+    {"path": "contact_recovery_sequence/04_aligned_insertion.png", "sha256": "6e65c685da8147098e528817ebac71ab2b4d2cfa4fe6c3020d7de70e3be22c79", "resolution": [1920, 1080]},
+    {"path": "REVIEW_CONTACT_SHEET.png", "sha256": "95c49f4e38ebea2b22067720bf226a891172bdccd13d588e37f81ed0a550253c", "resolution": [1920, 1160], "review_only": true}
+  ]
+}
