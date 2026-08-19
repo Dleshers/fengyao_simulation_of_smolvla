@@ -1,0 +1,22 @@
+{
+  "case_type": "simulator_rendered_conceptual_near_rim_contact_pair",
+  "formal64_pair_id": null,
+  "is_formal64_evaluation_trajectory": false,
+  "is_policy_output": false,
+  "script": "experiment/render_conceptual_contact_misalignment_pair_20260820.py",
+  "camera_pose": [0.86, -0.58, 0.38],
+  "camera_target": [0.54, 0.0, 0.15],
+  "resolution": [1920, 1080],
+  "peg_hole_scale": "Peg8mm / Hole8mm",
+  "joint_change": "Panda joint 1: +0.015 rad to 0 rad",
+  "measured_fingertip_shifts_m": {
+    "02_contact_misalignment": [-0.0001357198, 0.0083326939, -0.0000001341],
+    "03_lateral_recovery": [0.0, 0.0, 0.0]
+  },
+  "assets": [
+    {"path": "contact_recovery_pair/02_contact_misalignment.png", "sha256": "7945a918ce95fb0d3f901b29d0353f5452f170168dc52bd33bef63f6855d6527", "resolution": [1920, 1080]},
+    {"path": "contact_recovery_pair/03_lateral_recovery.png", "sha256": "34a8b939e7c1874a8ab236b5c17046026096ae947c235427a65d81009fd9b34c", "resolution": [1920, 1080]},
+    {"path": "REVIEW_PAIR_CONTACT_SHEET.png", "sha256": "6865cc9d95b754912560d071f1fba5950314ef4165efcbe9625921c307853ec1", "review_only": true}
+  ],
+  "caption": "Simulator-rendered conceptual illustration of near-rim contact-stage recovery. Scripted stills are not Formal64 evaluation trajectories or quantitative outcomes."
+}
