@@ -1,0 +1,15 @@
+{
+  "case_type": "simulator_rendered_conceptual_illustration",
+  "formal64_pair_id": null,
+  "is_formal64_evaluation_trajectory": false,
+  "is_policy_output": false,
+  "caption": "Simulator-rendered conceptual illustration of contact-stage recovery. The states are scripted illustrative configurations and are not Formal64 evaluation trajectories or quantitative outcomes.",
+  "third_panel_revision": "03_lateral_recovery.png was replaced by a dedicated close contact render so the wrist/end effector is visible.",
+  "assets": [
+    {"path": "contact_recovery_sequence/01_initial_lateral_error.png", "sha256": "bb2e0a9c36fa2d61e6587dd3145f59cd0cbcb46402b0111bceeeee1d337b2f71", "resolution": [1920, 1080], "camera": "overview"},
+    {"path": "contact_recovery_sequence/02_contact_misalignment.png", "sha256": "b7de3d7214bca12e0038f3a86e429ad15e900b1b42fad800201b6bcc08e2f07c", "resolution": [1920, 1080], "camera": "overview"},
+    {"path": "contact_recovery_sequence/03_lateral_recovery.png", "sha256": "e9771994dad5647022102b02421894ba4c2e30ffc7a967768a0c1a4539254ae7", "resolution": [1920, 1080], "camera": "dedicated close contact camera", "source_script": "experiment/render_conceptual_third_end_effector_20260819.py"},
+    {"path": "contact_recovery_sequence/04_aligned_insertion.png", "sha256": "6e65c685da8147098e528817ebac71ab2b4d2cfa4fe6c3020d7de70e3be22c79", "resolution": [1920, 1080], "camera": "overview"},
+    {"path": "REVIEW_CONTACT_SHEET.png", "sha256": "017e55ae65d903a1b7bbd58432020a9c0398b3f08afd345e73b179601a2de0b8", "resolution": [1920, 1160], "review_only": true}
+  ]
+}
