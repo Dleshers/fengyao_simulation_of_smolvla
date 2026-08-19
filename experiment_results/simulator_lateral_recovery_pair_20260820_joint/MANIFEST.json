@@ -1,0 +1,21 @@
+{
+  "case_type": "simulator_rendered_conceptual_joint_recovery_pair",
+  "formal64_pair_id": null,
+  "is_formal64_evaluation_trajectory": false,
+  "is_policy_output": false,
+  "script": "experiment/render_conceptual_joint_recovery_pair_20260820.py",
+  "camera_pose": [1.02, -0.78, 0.50],
+  "camera_target": [0.50, 0.0, 0.20],
+  "resolution": [1920, 1080],
+  "joint_change": "Panda joint 1: +0.18 rad to 0 rad",
+  "measured_fingertip_shifts_m": {
+    "02_contact_misalignment": [-0.0098521113, 0.0993893296, -0.0000001341],
+    "03_lateral_recovery": [0.0, 0.0, 0.0]
+  },
+  "assets": [
+    {"path": "contact_recovery_pair/02_contact_misalignment.png", "sha256": "10de109a81babbf45d43311bd25f18a8a51932c99ca306800d530f4989b51cbf", "resolution": [1920, 1080]},
+    {"path": "contact_recovery_pair/03_lateral_recovery.png", "sha256": "0dba7aef8349d0e87f484a778e80d174f0c5c54677ad0c214fbef4a2d09a6165", "resolution": [1920, 1080]},
+    {"path": "REVIEW_PAIR_CONTACT_SHEET.png", "sha256": "cfefb0c6aab317dcf90d9b7450d934a5bfcdab84f9354c14c2eb1e4fcc1f667e", "review_only": true}
+  ],
+  "caption": "Simulator-rendered conceptual illustration of lateral contact-stage recovery. Scripted stills are not Formal64 evaluation trajectories or quantitative outcomes."
+}
