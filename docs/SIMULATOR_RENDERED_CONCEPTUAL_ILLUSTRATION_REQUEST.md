@@ -145,6 +145,55 @@ If any panel fails these checks, adjust the illustrative camera or scripted
 scene and re-render it. Do not mark a failed render as acceptable merely because
 its resolution or object-distance metadata is valid.
 
+## Revision after review of the first simulator sequence
+
+The first uploaded sequence was not visually coherent enough for the thesis:
+the second panel did not clearly show the peg, the third panel showed the peg
+apparently floating without a visible connection to the wrist, and the fourth
+panel showed insertion without the end effector remaining in view. These are
+blocking defects even though the PNG resolution and basic simulator-pixel
+checks passed.
+
+The corrected sequence must satisfy the following stronger continuity rules:
+
+1. **All four panels must contain the wrist/end effector, the grasped peg, the
+   target fixture, and the hole.** Do not allow the robot to leave the frame in
+   the later panels.
+2. **The peg must remain visibly attached to the end effector in every panel.**
+   Preserve a rigid parent/attachment relationship in the scripted scene; a
+   detached or floating peg fails review.
+3. In `02_contact_misalignment`, the peg must be visible near the fixture and
+   visibly offset from the hole. The panel must not show only the fixture or an
+   empty table.
+4. In `03_lateral_recovery`, the same held peg must be visibly moving towards
+   the hole. It must not appear as an isolated horizontal object unrelated to
+   the robot.
+5. In `04_aligned_insertion`, the peg must remain visibly connected to the
+   wrist while its tip is aligned with or entering the hole. Keep enough of the
+   fixture in view to make insertion depth readable.
+6. Use one fixed camera pose, target, crop, lens, clipping range, and lighting
+   for all four states. Adjust the camera before rendering so that the full
+   wrist-to-hole chain remains in frame.
+
+The revised output must be written to a new directory, without overwriting the
+previous review material:
+
+```text
+experiment_results/simulator_conceptual_illustrations_20260819_corrected/
+```
+
+Add a `PIXEL_REVIEW.md` row for each image with explicit Boolean fields for
+`wrist_visible`, `peg_visible`, `peg_attached_to_wrist`, `fixture_visible`,
+`hole_visible`, `peg_hole_relationship_visible`, and
+`same_camera_as_sequence`. A metadata-only geometric distance check is not
+enough. Include a `REVIEW_CONTACT_SHEET.png` showing all four panels at the
+approximate intended print size.
+
+Reject the previous sequence as a thesis asset if any panel fails even one of
+these continuity checks. The corrected files must retain the conceptual-only
+caption and must not be presented as Formal64 policy trajectories or measured
+outcomes.
+
 ## Upload
 
 After visual review, commit the new directory and its metadata to the
