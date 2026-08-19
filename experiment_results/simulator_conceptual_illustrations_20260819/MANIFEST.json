@@ -1,0 +1,48 @@
+{
+  "case_type": "simulator_rendered_conceptual_illustration",
+  "formal64_pair_id": null,
+  "is_formal64_evaluation_trajectory": false,
+  "is_policy_output": false,
+  "source": "Isaac Sim 4.5 / Isaac Lab Factory PegInsert Direct scene",
+  "script": "experiment/render_simulator_conceptual_illustrations_20260819.py",
+  "caption": "Simulator-rendered conceptual illustration of contact-stage recovery. The states are scripted illustrative configurations and are not Formal64 evaluation trajectories or quantitative outcomes.",
+  "assets": [
+    {
+      "path": "contact_recovery_sequence/01_initial_lateral_error.png",
+      "sha256": "f981a5af056d27dc6476cb6c53e4360c2fc5fee47555af1ff94b1a7b7555c828",
+      "bytes": 1752871,
+      "resolution": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "path": "contact_recovery_sequence/02_contact_misalignment.png",
+      "sha256": "19f670efb1c334de2b0a0dc589d745ad03e1926868eda4b101168037dca15df1",
+      "bytes": 1789082,
+      "resolution": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "path": "contact_recovery_sequence/03_lateral_recovery.png",
+      "sha256": "d7a13d84ce2b839eccdd513fef16502428a5f15af3bb251fbbb001f81be2ce42",
+      "bytes": 1806263,
+      "resolution": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "path": "contact_recovery_sequence/04_aligned_insertion.png",
+      "sha256": "4934c6b81c054a884ccc9e4ff4fad9b4a9ccd8cb52bdb8618f0dfb9275134d65",
+      "bytes": 1800788,
+      "resolution": [
+        1920,
+        1080
+      ]
+    }
+  ],
+  "metadata": "contact_recovery_sequence/metadata.json"
+}

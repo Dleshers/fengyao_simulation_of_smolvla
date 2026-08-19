@@ -1,0 +1,68 @@
+{
+  "case_type": "simulator_rendered_conceptual_illustration",
+  "formal64_pair_id": null,
+  "is_formal64_evaluation_trajectory": false,
+  "is_policy_output": false,
+  "scene_seed": 20260819,
+  "script_or_waypoint_config": "experiment/render_simulator_conceptual_illustrations_20260819.py",
+  "source_scene": "Isaac Lab Factory PegInsert Direct scene with standard robot, factory peg, factory hole fixture, and table",
+  "camera_pose": [
+    0.9800000190734863,
+    -0.75,
+    0.6200000047683716
+  ],
+  "camera_target": [
+    0.6000000238418579,
+    0.0,
+    0.10499999672174454
+  ],
+  "resolution": [
+    1920,
+    1080
+  ],
+  "lighting": {
+    "dome_intensity": 1800.0,
+    "key_intensity": 9000.0,
+    "fill_intensity": 3500.0,
+    "tonemap_exposure": 0.5
+  },
+  "states": {
+    "01_initial_lateral_error": {
+      "step": 0,
+      "png": "contact_recovery_sequence/01_initial_lateral_error.png",
+      "waypoint_delta_xyz_m": [
+        0.01600000075995922,
+        0.008999999612569809,
+        0.009999999776482582
+      ]
+    },
+    "02_contact_misalignment": {
+      "step": 1,
+      "png": "contact_recovery_sequence/02_contact_misalignment.png",
+      "waypoint_delta_xyz_m": [
+        0.00800000037997961,
+        0.004000000189989805,
+        0.003000000026077032
+      ]
+    },
+    "03_lateral_recovery": {
+      "step": 2,
+      "png": "contact_recovery_sequence/03_lateral_recovery.png",
+      "waypoint_delta_xyz_m": [
+        0.0020000000949949026,
+        0.0010000000474974513,
+        0.0
+      ]
+    },
+    "04_aligned_insertion": {
+      "step": 3,
+      "png": "contact_recovery_sequence/04_aligned_insertion.png",
+      "waypoint_delta_xyz_m": [
+        0.0,
+        0.0,
+        -0.004000000189989805
+      ]
+    }
+  },
+  "caption": "Simulator-rendered conceptual illustration of contact-stage recovery. The states are scripted illustrative configurations and are not Formal64 evaluation trajectories or quantitative outcomes."
+}
