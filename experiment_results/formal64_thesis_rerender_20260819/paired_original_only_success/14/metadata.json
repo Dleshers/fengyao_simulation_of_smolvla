@@ -1,0 +1,182 @@
+{
+  "pair_id": 14,
+  "case_type": "paired_original_only_success",
+  "load_band": "low",
+  "direction_sector": 7,
+  "seed": 20260845,
+  "snapshot_sha256": "c6d5b3bd3378a4a12420887cf136e0dd6cf9d6aec1910dbf0a3ebc240c5c5197",
+  "checkpoint": {
+    "visual": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/models/contact_recovery_actual_failure80_smoke_20260815/runs/visual/checkpoints/010000/pretrained_model",
+    "torque_original": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/models/contact_recovery_actual_failure80_smoke_20260815/runs/torque/checkpoints/010000/pretrained_model"
+  },
+  "illustrative_camera_pose": [
+    0.8960411548614502,
+    -0.3547537326812744,
+    0.3043423891067505
+  ],
+  "illustrative_camera_target": [
+    0.5560411810874939,
+    0.005246269982308149,
+    0.08434239029884338
+  ],
+  "resolution": [
+    1920,
+    1080
+  ],
+  "branches": {
+    "visual": {
+      "official_strict_success": false,
+      "official_ejection": false,
+      "replay_outcome": {
+        "success": false,
+        "ejection": false,
+        "passed_through": false,
+        "steps": 240,
+        "first_aligned_step": 1,
+        "last_trace": {
+          "step": 239,
+          "xy_error_m": 0.026696844026446342,
+          "depth_m": -0.007330909371376038,
+          "strict": false,
+          "ejection": false,
+          "passed_through": false
+        }
+      },
+      "frames": {
+        "initial": {
+          "step": 0,
+          "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/visual_illustrative_initial.png"
+        },
+        "recovery": {
+          "step": 80,
+          "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/visual_illustrative_recovery.png"
+        },
+        "terminal": {
+          "step": 240,
+          "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/visual_illustrative_terminal.png"
+        }
+      },
+      "acceptance": {
+        "initial": {
+          "wrist_visible_geometry": true,
+          "peg_visible_geometry": true,
+          "fixture_visible_geometry": true,
+          "peg_hole_relationship_geometry": true,
+          "resolution_ok": true,
+          "non_empty_image": true,
+          "same_camera_pose_within_pair": true,
+          "object_target_distances_m": {
+            "wrist": 0.037058740854263306,
+            "peg": 0.004615998826920986,
+            "fixture": 0.020000003278255463
+          }
+        },
+        "recovery": {
+          "wrist_visible_geometry": true,
+          "peg_visible_geometry": true,
+          "fixture_visible_geometry": true,
+          "peg_hole_relationship_geometry": true,
+          "resolution_ok": true,
+          "non_empty_image": true,
+          "same_camera_pose_within_pair": true,
+          "object_target_distances_m": {
+            "wrist": 0.039902638643980026,
+            "peg": 0.0141874048858881,
+            "fixture": 0.020000003278255463
+          }
+        },
+        "terminal": {
+          "wrist_visible_geometry": true,
+          "peg_visible_geometry": true,
+          "fixture_visible_geometry": true,
+          "peg_hole_relationship_geometry": true,
+          "resolution_ok": true,
+          "non_empty_image": true,
+          "same_camera_pose_within_pair": true,
+          "object_target_distances_m": {
+            "wrist": 0.02725634165108204,
+            "peg": 0.03820602223277092,
+            "fixture": 0.020000003278255463
+          }
+        }
+      }
+    },
+    "torque-original": {
+      "official_strict_success": true,
+      "official_ejection": false,
+      "replay_outcome": {
+        "success": true,
+        "ejection": false,
+        "passed_through": false,
+        "steps": 45,
+        "first_aligned_step": 1,
+        "last_trace": {
+          "step": 44,
+          "xy_error_m": 0.00037861158489249647,
+          "depth_m": 2.7827918529510498e-05,
+          "strict": true,
+          "ejection": false,
+          "passed_through": false
+        }
+      },
+      "frames": {
+        "initial": {
+          "step": 0,
+          "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/torque_original_illustrative_initial.png"
+        },
+        "recovery": {
+          "step": 15,
+          "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/torque_original_illustrative_recovery.png"
+        },
+        "terminal": {
+          "step": 45,
+          "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/torque_original_illustrative_terminal.png"
+        }
+      },
+      "acceptance": {
+        "initial": {
+          "wrist_visible_geometry": true,
+          "peg_visible_geometry": true,
+          "fixture_visible_geometry": true,
+          "peg_hole_relationship_geometry": true,
+          "resolution_ok": true,
+          "non_empty_image": true,
+          "same_camera_pose_within_pair": true,
+          "object_target_distances_m": {
+            "wrist": 0.037058740854263306,
+            "peg": 0.004615998826920986,
+            "fixture": 0.020000003278255463
+          }
+        },
+        "recovery": {
+          "wrist_visible_geometry": true,
+          "peg_visible_geometry": true,
+          "fixture_visible_geometry": true,
+          "peg_hole_relationship_geometry": true,
+          "resolution_ok": true,
+          "non_empty_image": true,
+          "same_camera_pose_within_pair": true,
+          "object_target_distances_m": {
+            "wrist": 0.03514309599995613,
+            "peg": 0.0025416065473109484,
+            "fixture": 0.020000003278255463
+          }
+        },
+        "terminal": {
+          "wrist_visible_geometry": true,
+          "peg_visible_geometry": true,
+          "fixture_visible_geometry": true,
+          "peg_hole_relationship_geometry": true,
+          "resolution_ok": true,
+          "non_empty_image": true,
+          "same_camera_pose_within_pair": true,
+          "object_target_distances_m": {
+            "wrist": 0.012617260217666626,
+            "peg": 0.01997576281428337,
+            "fixture": 0.020000003278255463
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "pair_id": 14,
+  "branch": "visual",
+  "snapshot_sha256": "c6d5b3bd3378a4a12420887cf136e0dd6cf9d6aec1910dbf0a3ebc240c5c5197",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "illustrative_render_not_policy_input": true,
+  "views": {
+    "overview": {
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/task_overview/task_contact_overview_oblique.png",
+      "illustrative_camera_pose": [
+        1.0760412216186523,
+        -0.5347537398338318,
+        0.42434239387512207
+      ],
+      "illustrative_camera_target": [
+        0.5560411810874939,
+        0.005246269982308149,
+        0.08434239029884338
+      ],
+      "acceptance": {
+        "wrist_visible_geometry": true,
+        "peg_visible_geometry": true,
+        "fixture_visible_geometry": true,
+        "peg_hole_relationship_geometry": true,
+        "resolution_ok": true,
+        "non_empty_image": true,
+        "same_camera_pose_within_pair": true,
+        "object_target_distances_m": {
+          "wrist": 0.037058740854263306,
+          "peg": 0.004615998826920986,
+          "fixture": 0.020000003278255463
+        }
+      }
+    },
+    "side": {
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/task_overview/task_contact_overview_side.png",
+      "illustrative_camera_pose": [
+        0.7560411691665649,
+        -0.5547537207603455,
+        0.20434239506721497
+      ],
+      "illustrative_camera_target": [
+        0.5560411810874939,
+        0.005246269982308149,
+        0.08434239029884338
+      ],
+      "acceptance": {
+        "wrist_visible_geometry": true,
+        "peg_visible_geometry": true,
+        "fixture_visible_geometry": true,
+        "peg_hole_relationship_geometry": true,
+        "resolution_ok": true,
+        "non_empty_image": true,
+        "same_camera_pose_within_pair": true,
+        "object_target_distances_m": {
+          "wrist": 0.037058740854263306,
+          "peg": 0.004615998826920986,
+          "fixture": 0.020000003278255463
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+# Formal64 thesis render re-run report
+
+- Official result source: `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/evaluation_results/visual_torque_4090_master_20260817/four_arm_formal64_adaptive_20260817/results.json`
+- Conditions: visual, torque-original, torque-zero only; no shuffle assets were rendered.
+- Resolution: 1920×1080 PNG for every illustrative render.
+- Every paired branch starts from its identical frozen Formal64 snapshot; official outcome labels and replay observations are kept separate in metadata.
+
+## Asset map
+
+- pair 14 | visual | initial | official success=False | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/visual_illustrative_initial.png`
+- pair 14 | visual | recovery | official success=False | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/visual_illustrative_recovery.png`
+- pair 14 | visual | terminal | official success=False | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/visual_illustrative_terminal.png`
+- pair 14 | torque-original | initial | official success=True | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/torque_original_illustrative_initial.png`
+- pair 14 | torque-original | recovery | official success=True | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/torque_original_illustrative_recovery.png`
+- pair 14 | torque-original | terminal | official success=True | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/14/torque_original_illustrative_terminal.png`
+- pair 3 | visual | initial | official success=False | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/3/visual_illustrative_initial.png`
+- pair 3 | visual | recovery | official success=False | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/3/visual_illustrative_recovery.png`
+- pair 3 | visual | terminal | official success=False | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/3/visual_illustrative_terminal.png`
+- pair 3 | torque-original | initial | official success=True | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/3/torque_original_illustrative_initial.png`
+- pair 3 | torque-original | recovery | official success=True | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/3/torque_original_illustrative_recovery.png`
+- pair 3 | torque-original | terminal | official success=True | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/paired_original_only_success/3/torque_original_illustrative_terminal.png`
+- pair 42 | torque_original_initial | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/original_ejection_safety_case/42/torque_original_initial_illustrative.png`
+- pair 42 | torque_original_pre_ejection | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/original_ejection_safety_case/42/torque_original_pre_ejection_illustrative.png`
+- pair 42 | torque_original_ejection_or_terminal | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/original_ejection_safety_case/42/torque_original_ejection_or_terminal_illustrative.png`
+- pair 42 | torque_zero_terminal | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/original_ejection_safety_case/42/torque_zero_terminal_illustrative.png`
+- overview | overview | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/task_overview/task_contact_overview_oblique.png`
+- overview | side | 1920×1080 | acceptance=True | `/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_thesis_rerender_20260819/task_overview/task_contact_overview_side.png`
+
+## Acceptance note
+
+The acceptance metadata verifies image resolution/non-emptiness and the fixed-camera geometric framing of wrist, peg, and fixture around the contact target. PNGs contain no GUI, labels, arrows, or debug overlays.
