@@ -1,0 +1,53 @@
+{
+  "case_type": "simulator_rendered_contact_stage_geometric_pair",
+  "formal64_pair_id": null,
+  "is_formal64_evaluation_trajectory": false,
+  "is_policy_output": false,
+  "camera_pose": [
+    0.7560411691665649,
+    -0.2547537088394165,
+    0.24934238195419312
+  ],
+  "camera_target": [
+    0.5560411810874939,
+    0.005246269982308149,
+    0.0893423855304718
+  ],
+  "resolution": [
+    1920,
+    1080
+  ],
+  "geometry": {
+    "peg_diameter_m": 0.008,
+    "hole_diameter_m": 0.008,
+    "contact_stage_center_offset_m": 0.006,
+    "estimated_rim_interference_m": 0.002,
+    "contact_proxy": "peg/hole radial overlap at mouth; no force/contact trace claimed"
+  },
+  "joint_change": "Panda joint 1: +0.010 rad to 0 rad; held peg explicitly follows the 6 mm contact-stage offset",
+  "measured_states": {
+    "02_contact_misalignment": {
+      "fingertip_shift_m": [
+        -7.665157318115234e-05,
+        0.005555484909564257,
+        -1.6391277313232422e-07
+      ],
+      "peg_center_offset_from_hole_m": [
+        0.0059999823570251465,
+        0.0
+      ]
+    },
+    "03_lateral_recovery": {
+      "fingertip_shift_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "peg_center_offset_from_hole_m": [
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "caption": "Close simulator-rendered conceptual illustration: peg touches/intersects the hole rim before lateral recovery. Scripted stills are not Formal64 evaluation trajectories or quantitative outcomes."
+}
