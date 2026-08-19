@@ -1,0 +1,18 @@
+{
+  "case_type": "simulator_rendered_conceptual_illustration_pair",
+  "formal64_pair_id": null,
+  "is_formal64_evaluation_trajectory": false,
+  "is_policy_output": false,
+  "script": "experiment/render_conceptual_misalignment_recovery_pair_20260819.py",
+  "snapshot_source": "_runtime/remote_handoff_gripper_lstm_work/persistent/evaluation_results/visual_torque_4090_master_20260817/four_arm_formal64_adaptive_20260817/snapshots/snapshot_0014.pt",
+  "camera_pose": [1.02, -0.78, 0.50],
+  "camera_target": [0.50, 0.0, 0.17],
+  "resolution": [1920, 1080],
+  "attachment_method": "identical USD translation on /World/envs/env_0/Robot and /World/envs/env_0/HeldAsset",
+  "assets": [
+    {"path": "contact_recovery_pair/02_contact_misalignment.png", "sha256": "2f467b6deb46c90247c9ff138ea5db13e133a9213b3e8e670023c65913852ef4", "waypoint_delta_xyz_m": [0.02, 0.01, 0.004]},
+    {"path": "contact_recovery_pair/03_lateral_recovery.png", "sha256": "abaf655545dc39c22f3ea5c3093cb1fdaf59fa755fcd4e67e11dea6a3c915499", "waypoint_delta_xyz_m": [0.004, 0.002, 0.001]},
+    {"path": "REVIEW_PAIR_CONTACT_SHEET.png", "sha256": "9b6d3036d66715e9e82240591d4d51b345c968776ad68496b70ee4d6e53dfd3f", "review_only": true}
+  ],
+  "caption": "Simulator-rendered conceptual illustration of lateral contact-stage recovery. These scripted states are not Formal64 evaluation trajectories or quantitative outcomes."
+}

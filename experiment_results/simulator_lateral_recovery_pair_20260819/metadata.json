@@ -1,0 +1,42 @@
+{
+  "case_type": "simulator_rendered_conceptual_illustration_pair",
+  "formal64_pair_id": null,
+  "is_formal64_evaluation_trajectory": false,
+  "is_policy_output": false,
+  "scene_seed": 20260819,
+  "camera_pose": [
+    1.0199999809265137,
+    -0.7799999713897705,
+    0.5
+  ],
+  "camera_target": [
+    0.5,
+    0.0,
+    0.17000000178813934
+  ],
+  "resolution": [
+    1920,
+    1080
+  ],
+  "attachment_method": "identical USD translation on /World/envs/env_0/Robot and /World/envs/env_0/HeldAsset",
+  "interpretation": "02 shows a larger lateral peg-hole error; 03 shows the same scene from the same camera after the scripted lateral offset is reduced.",
+  "states": {
+    "02_contact_misalignment": {
+      "png": "contact_recovery_pair/02_contact_misalignment.png",
+      "waypoint_delta_xyz_m": [
+        0.019999999552965164,
+        0.009999999776482582,
+        0.004000000189989805
+      ]
+    },
+    "03_lateral_recovery": {
+      "png": "contact_recovery_pair/03_lateral_recovery.png",
+      "waypoint_delta_xyz_m": [
+        0.004000000189989805,
+        0.0020000000949949026,
+        0.0010000000474974513
+      ]
+    }
+  },
+  "caption": "Simulator-rendered conceptual illustration of lateral contact-stage recovery. These scripted states are not Formal64 evaluation trajectories or quantitative outcomes."
+}
