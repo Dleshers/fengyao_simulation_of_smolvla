@@ -1,0 +1,11 @@
+{
+  "pair_id": 14,
+  "case_type": "paired_original_only_success",
+  "sector": 7,
+  "load_band": "low",
+  "official_outcomes": {
+    "visual": false,
+    "torque_original": true,
+    "zero": true
+  }
+}

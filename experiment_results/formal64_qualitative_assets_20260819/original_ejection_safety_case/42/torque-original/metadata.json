@@ -1,0 +1,27 @@
+{
+  "pair_id": "42",
+  "branch": "torque-original",
+  "checkpoint": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/models/contact_recovery_actual_failure80_smoke_20260815/runs/torque/checkpoints/010000/pretrained_model",
+  "seed": "20260887",
+  "load_band": "low",
+  "direction_sector": "5",
+  "frame_or_step": 0,
+  "camera_name": "camera1 | camera2",
+  "strict_success": false,
+  "ejection": true,
+  "pass_through": false,
+  "min_xy_error": 0.00036159020964987576,
+  "final_depth": 0.03616394102573395,
+  "official_outcome_source": "Formal64 results.json",
+  "replay_restore_max_abs": 1.1920928955078125e-07,
+  "replay_steps": 49,
+  "replay_success": true,
+  "replay_ejection": false,
+  "replay_pass_through": false,
+  "replay_first_aligned_step": 1,
+  "stage_steps": {
+    "initial": 0,
+    "recovery": 16,
+    "terminal": 49
+  }
+}

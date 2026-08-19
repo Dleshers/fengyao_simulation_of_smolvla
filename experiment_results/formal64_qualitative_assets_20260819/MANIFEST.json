@@ -1,0 +1,128 @@
+{
+  "official_results": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/evaluation_results/visual_torque_4090_master_20260817/four_arm_formal64_adaptive_20260817/results.json",
+  "checkpoint_visual": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/models/contact_recovery_actual_failure80_smoke_20260815/runs/visual/checkpoints/010000/pretrained_model",
+  "checkpoint_torque": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/models/contact_recovery_actual_failure80_smoke_20260815/runs/torque/checkpoints/010000/pretrained_model",
+  "selected_pair_ids": [
+    14,
+    3,
+    42
+  ],
+  "assets": [
+    {
+      "pair_id": 14,
+      "case_type": "paired_original_only_success",
+      "condition": "visual",
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/14/visual",
+      "metadata": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/14/visual/metadata.json",
+      "trace": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/14/visual/trace.npz",
+      "official_success": false,
+      "official_ejection": false
+    },
+    {
+      "pair_id": 14,
+      "case_type": "paired_original_only_success",
+      "condition": "torque-original",
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/14/torque-original",
+      "metadata": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/14/torque-original/metadata.json",
+      "trace": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/14/torque-original/trace.npz",
+      "official_success": true,
+      "official_ejection": false
+    },
+    {
+      "pair_id": 14,
+      "case_type": "paired_original_only_success",
+      "condition": "torque-zero",
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/14/torque-zero",
+      "metadata": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/14/torque-zero/metadata.json",
+      "trace": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/14/torque-zero/trace.npz",
+      "official_success": true,
+      "official_ejection": false
+    },
+    {
+      "pair_id": 3,
+      "case_type": "paired_original_only_success",
+      "condition": "visual",
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/3/visual",
+      "metadata": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/3/visual/metadata.json",
+      "trace": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/3/visual/trace.npz",
+      "official_success": false,
+      "official_ejection": false
+    },
+    {
+      "pair_id": 3,
+      "case_type": "paired_original_only_success",
+      "condition": "torque-original",
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/3/torque-original",
+      "metadata": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/3/torque-original/metadata.json",
+      "trace": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/3/torque-original/trace.npz",
+      "official_success": true,
+      "official_ejection": false
+    },
+    {
+      "pair_id": 3,
+      "case_type": "paired_original_only_success",
+      "condition": "torque-zero",
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/3/torque-zero",
+      "metadata": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/3/torque-zero/metadata.json",
+      "trace": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/paired_original_only_success/3/torque-zero/trace.npz",
+      "official_success": false,
+      "official_ejection": false
+    },
+    {
+      "pair_id": 42,
+      "case_type": "original_ejection_safety_case",
+      "condition": "visual",
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/original_ejection_safety_case/42/visual",
+      "metadata": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/original_ejection_safety_case/42/visual/metadata.json",
+      "trace": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/original_ejection_safety_case/42/visual/trace.npz",
+      "official_success": true,
+      "official_ejection": false
+    },
+    {
+      "pair_id": 42,
+      "case_type": "original_ejection_safety_case",
+      "condition": "torque-original",
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/original_ejection_safety_case/42/torque-original",
+      "metadata": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/original_ejection_safety_case/42/torque-original/metadata.json",
+      "trace": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/original_ejection_safety_case/42/torque-original/trace.npz",
+      "official_success": false,
+      "official_ejection": true
+    },
+    {
+      "pair_id": 42,
+      "case_type": "original_ejection_safety_case",
+      "condition": "torque-zero",
+      "path": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/original_ejection_safety_case/42/torque-zero",
+      "metadata": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/original_ejection_safety_case/42/torque-zero/metadata.json",
+      "trace": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/formal64_qualitative/original_ejection_safety_case/42/torque-zero/trace.npz",
+      "official_success": true,
+      "official_ejection": false
+    }
+  ],
+  "snapshot_audit": [
+    {
+      "pair_id": 14,
+      "snapshot_sha256": "c6d5b3bd3378a4a12420887cf136e0dd6cf9d6aec1910dbf0a3ebc240c5c5197",
+      "first_rgb_sha256": {
+        "camera1": "8f1fbcee1098b0bc69bbece9393332d2c33e65f075a9e0d0620ffea236ccb45d",
+        "camera2": "34269c8b0a743b87e6a8a38220f3040bc40e8594f90e50b0d584dc7129d074c6"
+      }
+    },
+    {
+      "pair_id": 3,
+      "snapshot_sha256": "c80f585bbd525f45fc8e83e3ab37381e5806cde628147bc93d18c9beaa25d02d",
+      "first_rgb_sha256": {
+        "camera1": "542e4837f8c43a67a578e2f0f7392006809ed118e58565b7e6762f0d25b9d572",
+        "camera2": "9495c0940de392a50323c789c9ff01a316c60811cd71c8886847e713d6597ca6"
+      }
+    },
+    {
+      "pair_id": 42,
+      "snapshot_sha256": "0321345b39b11f3bbc047d85949268821fbc0097f14be0b02f3a14ded9281164",
+      "first_rgb_sha256": {
+        "camera1": "f9659225aeb96edb34c430c9f8158762b3984efc74dc0c9517072565d6e2e7f3",
+        "camera2": "d16fcff53604d399bce89cca942732472227ab953fefd5c42db901dfe72fdbe1"
+      }
+    }
+  ]
+}

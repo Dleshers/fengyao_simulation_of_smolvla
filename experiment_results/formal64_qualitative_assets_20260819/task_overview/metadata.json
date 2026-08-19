@@ -1,0 +1,11 @@
+{
+  "source_pair_id": 14,
+  "source_snapshot": "/root/autodl-tmp/simulation_smolvla/fengyao_simulation_of_smolvla/_runtime/remote_handoff_gripper_lstm_work/persistent/evaluation_results/visual_torque_4090_master_20260817/four_arm_formal64_adaptive_20260817/snapshots/snapshot_0014.pt",
+  "camera1": "oblique",
+  "camera2": "side",
+  "resolution": [
+    1280,
+    720
+  ],
+  "illustrative_render_not_policy_input": true
+}

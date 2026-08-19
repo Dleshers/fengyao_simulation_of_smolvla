@@ -1,0 +1,11 @@
+{
+  "pair_id": 42,
+  "case_type": "original_ejection_safety_case",
+  "sector": 5,
+  "load_band": "low",
+  "official_outcomes": {
+    "visual": true,
+    "torque_original": false,
+    "zero": true
+  }
+}
